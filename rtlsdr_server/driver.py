@@ -88,6 +88,17 @@ class AbstractRtlDriver(object):
 
 
 class IcecastRtlFMDriver(AbstractRtlDriver):
+    """Driver that runs rtl_fm through a pipeline to an Icecast server.
+
+    This driver basically runs the following commands which should send
+    audio data to an Icecast server:
+        rtl_fm -f ${frequency} -s 200k -r 48k -A fast - | \
+        sox -t raw -r 48k -es -b 16 -c 1 -V1 - -t mp3 - | \
+        ffmpeg -i - -f mp3 -v 24 icecast://source@hackme:<host:port>/<path>
+
+    This server then controls the frequency and can permit redirecting to
+    the Icecast server internally, if desired.
+    """
 
     def __init__(self, config):
         super(IcecastRtlFMDriver, self).__init__()
@@ -112,7 +123,7 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
     async def start(self, frequency):
         rtl_cmd = [
             self._rtlfm_exec_path, '-f', frequency, '-s',
-            '200k', 'r', '48k', '-A', 'fast', '-'
+            '200k', '-r', '48k', '-A', 'fast', '-'
         ]
         sox_cmd = [
             self._sox_exec_path, '-t', 'raw', '-r', '48k', '-es',

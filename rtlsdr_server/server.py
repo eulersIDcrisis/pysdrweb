@@ -3,11 +3,15 @@
 Server with a simple API to stream to an icecast server.
 """
 import signal
+import logging
 import asyncio
 import traceback
 from tornado import web, ioloop, httpclient, httpserver, netutil
 
 from driver import IcecastRtlFMDriver
+
+
+logger = logging.getLogger()
 
 
 class BaseRequestHandler(web.RequestHandler):
@@ -29,7 +33,7 @@ class FrequencyHandler(BaseRequestHandler):
                 running=bool(driver.is_running())
             ))
         except Exception:
-            traceback.print_exc()
+            logger.exception('Error fetching frequency!')
             self.send_status(500, 'Internal Server Error')
 
     async def post(self):
@@ -37,7 +41,7 @@ class FrequencyHandler(BaseRequestHandler):
             driver = self.get_driver()
             await driver.change_frequency('107.3M')
         except Exception:
-            traceback.print_exc()
+            logger.exception('Error updating frequency!')
             self.send_status(500, 'Internal Server Error')
 
 
@@ -49,22 +53,12 @@ class ContextInfoHandler(BaseRequestHandler):
             self.set_header('Content-Type', 'text/plain')
             self.write(driver.get_log())
         except Exception:
-            traceback.print_exc()
+            logger.exception('Error fetching context/driver information!')
             self.set_status(500)
             self.write(dict(status=500, message="Internal Server Error"))
 
 
 class IcecastProxyHandler(BaseRequestHandler):
-
-    async def data_received(self, chunk):
-        self._send_queue.put(chunk)
-
-    async def body_producer(self, write):
-        while True:
-            chunk = await self._send_queue.get()
-            if chunk is None:
-                return
-            await write(chunk)
 
     async def get(self):
         # Proxy this request to the icecast server. This currently only
@@ -85,9 +79,9 @@ class IcecastProxyHandler(BaseRequestHandler):
             # Write the response.
             self.write(exc.response.body)
         except Exception:
+            logger.exception('Error proxying to Icecast server!')
             self.set_status(500)
             self.write(dict(status=500, message="Internal Server Error."))
-            traceback.print_exc()
 
 
 class Server(object):
@@ -100,18 +94,16 @@ class Server(object):
         self._shutdown_hooks = []
         self._drain_hooks = []
 
-        self._ioloop = None
-
-        # Create the RtlFMDriver
-        # self._context = RtlFMDriver()
+        # Store the IOLoop here for reference when shutting down.
+        self._loop = None
 
     def run(self):
-        self._ioloop = ioloop.IOLoop.current()
+        self._loop = ioloop.IOLoop.current()
         try:
-            self._ioloop.add_callback(self._start)
+            self._loop.add_callback(self._start)
 
             # Run the loop.
-            self._ioloop.start()
+            self._loop.start()
         except Exception:
             traceback.print_exc()
         # Run the shutdown hooks.
@@ -119,17 +111,21 @@ class Server(object):
             try:
                 hook()
             except Exception:
-                traceback.print_exc()
+                logger.exception('Failed to run shutdown hook!')
 
     def stop(self, from_signal_handler=False):
+        logger.info('Server shutdown requested.')
         if from_signal_handler:
-            self._ioloop.add_callback_from_signal(self._stop)
+            self._loop.add_callback_from_signal(self._stop)
         else:
-            self._ioloop.add_callback(self._stop)
+            self._loop.add_callback(self._stop)
 
     async def _start(self):
         # Start the driver.
-        await self._driver.start('107.3M')
+        frequency = '107.3M'
+        logger.info('Starting on frequency: %s', frequency)
+        await self._driver.start(frequency)
+
         # await self._context.start()
 
         # Now that the process is started, setup the server.
@@ -140,6 +136,8 @@ class Server(object):
             (r'/api/procinfo', ContextInfoHandler),
             (r'/static/(.*)', web.StaticFileHandler)
         ], driver=self._driver)
+
+        logger.info('Running server on port: %d', self._port)
         sockets = netutil.bind_sockets(self._port)
         server = httpserver.HTTPServer(app)
         server.add_sockets(sockets)
@@ -151,22 +149,25 @@ class Server(object):
 
     async def _stop(self):
         # Run the drain hooks in reverse.
-        # TODO: Run with some timeout
+        timeout = 5
         for hook in reversed(self._drain_hooks):
             try:
-                await asyncio.wait_for(hook(), 5)
+                await asyncio.wait_for(hook(), timeout)
             except asyncio.TimeoutError:
-                print("Drain hook timed out.")
+                logger.warning('Drain hook timed out after %d seconds.',
+                               timeout)
             except Exception:
-                traceback.print_exc()
+                logger.exception('Error running drain hook!')
         # Stop the current loop.
         ioloop.IOLoop.current().stop()
 
 
 def run():
+    # Setup logging.
+    logging.basicConfig()
+
     driver = IcecastRtlFMDriver(dict())
     server = Server(driver)
-
     def _sighandler(signum, stack_frame):
         server.stop(from_signal_handler=True)
 
