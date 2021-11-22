@@ -2,6 +2,7 @@
 
 Server with a simple API to stream to an icecast server.
 """
+import os
 import signal
 import logging
 import asyncio
@@ -158,7 +159,8 @@ class Server(object):
             (r'/radio(\.[a-zA-Z0-9]+)?', ProcessAudioHandler),
             (r'/api/frequency', FrequencyHandler),
             (r'/api/procinfo', ContextInfoHandler),
-            (r'/static/(.*)', web.StaticFileHandler)
+            (r'/static/(.*)', web.StaticFileHandler, dict(
+                path=get_static_file_location()))
         ], driver=self._driver)
 
         logger.info('Running server on port: %d', self._port)
@@ -185,6 +187,10 @@ class Server(object):
         # Stop the current loop.
         ioloop.IOLoop.current().stop()
 
+
+def get_static_file_location():
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    return os.path.join(dir_path, 'static')
 
 def run():
     # Setup logging.
