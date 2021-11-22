@@ -10,6 +10,13 @@ import sys
 import configparser
 
 
+def load_config(path):
+    parser = configparser.ConfigParser()
+    with open(path, 'r') as stm:
+        config = parser.read_file(stm, source=path)
+    return config
+
+
 def create_default_config(stm):
     config = configparser.ConfigParser()
 
@@ -22,6 +29,7 @@ def create_default_config(stm):
 
     config['ICECAST_DRIVER'] = {
         'icecast_url': 'http://source:hackme@localhost:8000/radio',
+        'icecast_format': 'mp3',
         'sox_exec_path': '/usr/local/bin/sox',
         'ffmpeg_exec_path': '/usr/local/bin/ffmpeg',
     }

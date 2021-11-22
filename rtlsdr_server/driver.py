@@ -4,9 +4,18 @@ Driver for different subprocesses in the server.
 """
 import os
 import shlex
+import logging
 import asyncio
 import subprocess
 from collections import deque
+from tornado import httpclient
+
+
+logger = logging.getLogger('driver')
+
+
+class UnsupportedFormatError(Exception):
+    """Exception indicating an unsupported format."""
 
 
 async def _read_into_buffer(read_stream, buffer, encoding='utf-8'):
@@ -22,9 +31,14 @@ async def _read_into_buffer(read_stream, buffer, encoding='utf-8'):
 
 class AbstractRtlDriver(object):
 
-    def __init__(self):
+    def __init__(self, formats):
+        self._supported_formats = set(formats)
         self._proc = None
         self._frequency = '107.3M'
+
+    @property
+    def supported_formats(self):
+        return self._supported_formats
 
     @property
     def frequency(self):
@@ -86,6 +100,30 @@ class AbstractRtlDriver(object):
         # Start the process up again.
         await self.start(frequency)
 
+    async def process_request(self, req_handler, fmt):
+        # Proxy this request to the icecast server. This currently only
+        # supports GET, since that is all that should be necessary.
+        icecast_url = 'http://localhost:9000/serdsver.py'
+        try:
+            # Make the proxied request.
+            await httpclient.AsyncHTTPClient().fetch(
+                httpclient.HTTPRequest(
+                    icecast_url, streaming_callback=req_handler.write)
+            )
+        except httpclient.HTTPError as exc:
+            req_handler.set_status(exc.code)
+            # Write the headers.
+            for name, header in exc.response.headers.items():
+                if name.upper() in ['SERVER']:
+                    continue
+                req_handler.set_header(name, header)
+            # Write the response.
+            req_handler.write(exc.response.body)
+        except Exception:
+            logger.exception('Error proxying to Icecast server!')
+            req_handler.set_status(500)
+            req_handler.write(dict(status=500, message="Internal Server Error."))        
+
 
 class IcecastRtlFMDriver(AbstractRtlDriver):
     """Driver that runs rtl_fm through a pipeline to an Icecast server.
@@ -101,12 +139,15 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
     """
 
     def __init__(self, config):
-        super(IcecastRtlFMDriver, self).__init__()
+        # Supported formats are technically based on the Icecast configuration
+        # but for now, we'll assume MP3.
+        super(IcecastRtlFMDriver, self).__init__(['mp3'])
         self._rtlfm_exec_path = config.get('rtl_fm', '/usr/local/bin/rtl_fm')
         self._sox_exec_path = config.get('sox', '/usr/local/bin/sox')
 
         self._ffmpeg_exec_path = config.get('ffmpeg', '/usr/local/bin/ffmpeg')
         self._icecast_url = 'icecast://source:hackme@localhost:8000/radio'
+        self._client_url = 'http://localhost:8000/radio'
 
         self._stderr_fut = None
         self._stderr_buffer = deque()

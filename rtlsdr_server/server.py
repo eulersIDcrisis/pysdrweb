@@ -5,10 +5,11 @@ Server with a simple API to stream to an icecast server.
 import signal
 import logging
 import asyncio
+import argparse
 import traceback
 from tornado import web, ioloop, httpclient, httpserver, netutil
 
-from driver import IcecastRtlFMDriver
+from driver import IcecastRtlFMDriver, UnsupportedFormatError
 
 
 logger = logging.getLogger()
@@ -60,28 +61,51 @@ class ContextInfoHandler(BaseRequestHandler):
 
 class IcecastProxyHandler(BaseRequestHandler):
 
-    async def get(self):
-        # Proxy this request to the icecast server. This currently only
-        # supports GET, since that is all that should be necessary.
-        icecast_url = 'http://localhost:9000/serdsver.py'
+    async def get(self, ext):
+        if not ext:
+            ext = 'mp3'
+
+        logger.info("Using extension: %s", ext)
+        driver = self.get_driver()
+        await driver.process_request(self, ext)
+
+        # # Proxy this request to the icecast server. This currently only
+        # # supports GET, since that is all that should be necessary.
+        # icecast_url = 'http://localhost:9000/serdsver.py'
+        # try:
+        #     # Make the proxied request.
+        #     await httpclient.AsyncHTTPClient().fetch(
+        #         httpclient.HTTPRequest(
+        #             icecast_url, streaming_callback=self.write)
+        #     )
+        # except httpclient.HTTPError as exc:
+        #     self.set_status(exc.code)
+        #     # Write the headers.
+        #     for name, header in exc.response.headers.items():
+        #         if name.upper() in ['SERVER']:
+        #             continue
+        #         self.set_header(name, header)
+        #     # Write the response.
+        #     self.write(exc.response.body)
+        # except Exception:
+        #     logger.exception('Error proxying to Icecast server!')
+        #     self.set_status(500)
+        #     self.write(dict(status=500, message="Internal Server Error."))
+
+
+class ProcessAudioHandler(BaseRequestHandler):
+
+    async def get(self, ext):
+        if not ext:
+            ext = 'mp3'
+        driver = self.get_driver()
         try:
-            client = await httpclient.AsyncHTTPClient().fetch(
-                httpclient.HTTPRequest(
-                    icecast_url, streaming_callback=self.write)
-            )
-        except httpclient.HTTPError as exc:
-            self.set_status(exc.code)
-            # Write the headers.
-            for name, header in exc.response.headers.items():
-                if name.upper() in ['SERVER']:
-                    continue
-                self.set_header(name, header)
-            # Write the response.
-            self.write(exc.response.body)
+            await driver.process_request(self, ext)
+        except UnsupportedFormatError as exc:
+            self.send_status(400, str(exc))
         except Exception:
-            logger.exception('Error proxying to Icecast server!')
-            self.set_status(500)
-            self.write(dict(status=500, message="Internal Server Error."))
+            logger.exception("Error in process audio handler!")
+            self.send_status(500, "Internal Server Error.")
 
 
 class Server(object):
@@ -105,7 +129,7 @@ class Server(object):
             # Run the loop.
             self._loop.start()
         except Exception:
-            traceback.print_exc()
+            logger.exception("Error in IOLoop!")
         # Run the shutdown hooks.
         for hook in reversed(self._shutdown_hooks):
             try:
@@ -131,7 +155,7 @@ class Server(object):
         # Now that the process is started, setup the server.
         app = web.Application([
             (r'/', web.RedirectHandler, dict(url='/static/index.html')),
-            (r'/radio', IcecastProxyHandler),
+            (r'/radio(\.[a-zA-Z0-9]+)?', ProcessAudioHandler),
             (r'/api/frequency', FrequencyHandler),
             (r'/api/procinfo', ContextInfoHandler),
             (r'/static/(.*)', web.StaticFileHandler)
@@ -164,7 +188,7 @@ class Server(object):
 
 def run():
     # Setup logging.
-    logging.basicConfig()
+    logging.basicConfig(level=logging.INFO)
 
     driver = IcecastRtlFMDriver(dict())
     server = Server(driver)
