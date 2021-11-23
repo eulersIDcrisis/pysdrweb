@@ -84,18 +84,8 @@ class AbstractRtlDriver(object):
 
     async def change_frequency(self, frequency, timeout=5):
         if self.is_running():
-            self.stop()
-            try:
-                stop_fut = asyncio.create_task(self.wait())
-                await asyncio.wait_for(
-                    asyncio.shield(stop_fut),
-                    # Wait for up to timeout seconds.
-                    timeout)
-            except asyncio.TimeoutError:
-                # Failed to shutdown cleanly. Force close.
-                self.stop(force=True)
-                # This should work cleanly now.
-                await stop_fut
+            self.stop(force=True)
+            await self.wait()
             logger.info("Shutdown current RTL-FM pipeline.")
 
         # At this point, the process is stopped, so update the frequency.
@@ -200,9 +190,15 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
 
             icecast_socket = await tcpclient.TCPClient().connect(
                 host, port)
+        except iostream.StreamClosedError:
+            logger.error("Icecast server URL failed: %s", self._client_url)
+            req_handler.set_status(500)
+            req_handler.write(dict(
+                status=500, message="Internal Server Error!"))
+            return
         except Exception:
             # If the connection fails, then return a 500 status code.
-            logger.exception("Error!")
+            logger.exception("Unknown error proxying Icecast request!")
             req_handler.set_status(500)
             req_handler.write(dict(
                 status=500, message="Internal Server Error!"))
