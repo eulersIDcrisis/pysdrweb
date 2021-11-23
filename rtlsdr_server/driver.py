@@ -73,13 +73,11 @@ class AbstractRtlDriver(object):
             return None
         if self._proc.returncode is not None:
             return self._proc.returncode
-        proc_wait = asyncio.create_task(self._proc.wait())
-        await asyncio.gather(proc_wait, self._stderr_fut)
+        await self._proc.wait()
         code = self._proc.returncode
-        self._stderr_fut = None
         return code
 
-    def reset(self):
+    async def reset(self):
         pass
 
     async def change_frequency(self, frequency, timeout=5):
@@ -167,6 +165,11 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
             self._proc.stderr, self._stderr_buffer
         ))
         self._frequency = frequency
+
+    def stop(self, force=False):
+        super().stop(force=force)
+        if self._stderr_fut:
+            self._stderr_fut.cancel()
 
     async def process_request(self, req_handler, fmt):
         # Proxy this request to the icecast server. This currently only
