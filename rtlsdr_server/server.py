@@ -45,8 +45,16 @@ class FrequencyHandler(BaseRequestHandler):
 
     async def post(self):
         try:
+            new_freq = self.get_argument('frequency')
+        except Exception:
+            self.send_status(400, 'Bad arguments!')
+            return
+
+        try:
             driver = self.get_driver()
-            await driver.change_frequency('107.3M')
+            await driver.change_frequency(new_freq)
+            # Redirect back to the main page to refresh it.
+            self.redirect('/')
         except Exception:
             logger.exception('Error updating frequency!')
             self.send_status(500, 'Internal Server Error')
@@ -73,30 +81,8 @@ class IcecastProxyHandler(BaseRequestHandler):
 
         logger.info("Using extension: %s", ext)
         driver = self.get_driver()
+        # The driver takes total control of the request at this point.
         await driver.process_request(self, ext)
-
-        # # Proxy this request to the icecast server. This currently only
-        # # supports GET, since that is all that should be necessary.
-        # icecast_url = 'http://localhost:9000/serdsver.py'
-        # try:
-        #     # Make the proxied request.
-        #     await httpclient.AsyncHTTPClient().fetch(
-        #         httpclient.HTTPRequest(
-        #             icecast_url, streaming_callback=self.write)
-        #     )
-        # except httpclient.HTTPError as exc:
-        #     self.set_status(exc.code)
-        #     # Write the headers.
-        #     for name, header in exc.response.headers.items():
-        #         if name.upper() in ['SERVER']:
-        #             continue
-        #         self.set_header(name, header)
-        #     # Write the response.
-        #     self.write(exc.response.body)
-        # except Exception:
-        #     logger.exception('Error proxying to Icecast server!')
-        #     self.set_status(500)
-        #     self.write(dict(status=500, message="Internal Server Error."))
 
 
 class ProcessAudioHandler(BaseRequestHandler):

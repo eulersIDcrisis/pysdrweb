@@ -76,7 +76,6 @@ class AbstractRtlDriver(object):
         proc_wait = asyncio.create_task(self._proc.wait())
         await asyncio.gather(proc_wait, self._stderr_fut)
         code = self._proc.returncode
-        self._proc = None
         self._stderr_fut = None
         return code
 

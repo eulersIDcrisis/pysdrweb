@@ -20,6 +20,11 @@
 	<div>
 		<h2>Tuner</h2>
 		<div id="tuner-element"></div>
+		<form method="POST" action="/api/frequency">
+			<label for="change-freq">New Frequency:</label>
+			<input type="text" id="change-freq" name="frequency">
+			<input type="submit" value="Change Frequency">
+		</form>
 		<script type="text/javascript">
 			async function updateTuner() {
 				let data = {};
