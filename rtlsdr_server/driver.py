@@ -172,7 +172,7 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
         ])
         logger.info("Running: %s", cmd)
         self._proc = await asyncio.create_subprocess_shell(
-            cmd, stderr=subprocess.PIPE)
+            cmd, stderr=subprocess.PIPE, start_new_session=True)
         self._stderr_fut = asyncio.create_task(_read_into_buffer(
             self._proc.stderr, self._stderr_buffer
         ))
