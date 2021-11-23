@@ -179,6 +179,7 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
             shlex.join(sox_cmd),
             shlex.join(ffmpeg_cmd)
         ])
+        logger.info("Running: %s", cmd)
         self._proc = await asyncio.create_subprocess_shell(
             cmd, stderr=subprocess.PIPE)
         self._stderr_fut = asyncio.create_task(_read_into_buffer(
