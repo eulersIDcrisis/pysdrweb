@@ -21,9 +21,11 @@ class UnsupportedFormatError(Exception):
 
 
 async def _read_into_buffer(read_stream, buffer, encoding='utf-8'):
-    while True:
+    while not read_stream.at_eof():
+        print("Waiting for data")
         data = await read_stream.readline()
         if not data:
+            print("READ EMPTY")
             return
 
         if encoding:
