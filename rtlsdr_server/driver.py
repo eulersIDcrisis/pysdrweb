@@ -58,6 +58,9 @@ class AbstractRtlDriver(object):
     def stop(self, force=False):
         if not self._proc:
             return
+        # Process already exited. Nothing to stop.
+        if self._proc.returncode is not None:
+            return
         if force:
             self._proc.kill()
         else:
@@ -66,6 +69,8 @@ class AbstractRtlDriver(object):
     async def wait(self):
         if not self._proc:
             return None
+        if self._proc.returncode is not None:
+            return self._proc.returncode
         proc_wait = asyncio.create_task(self._proc.wait())
         await asyncio.gather(proc_wait, self._stderr_fut)
         code = self._proc.returncode

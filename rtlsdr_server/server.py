@@ -137,11 +137,13 @@ class Server(object):
         except Exception:
             logger.exception("Error in IOLoop!")
         # Run the shutdown hooks.
+        logger.info("Running %d shutdown hooks.", len(self._shutdown_hooks))
         for hook in reversed(self._shutdown_hooks):
             try:
                 hook()
             except Exception:
                 logger.exception('Failed to run shutdown hook!')
+        logger.info("Server should be stopped.")
 
     def stop(self, from_signal_handler=False):
         logger.info('Server shutdown requested.')
@@ -155,8 +157,11 @@ class Server(object):
         frequency = '107.3M'
         logger.info('Starting on frequency: %s', frequency)
         await self._driver.start(frequency)
-
-        # await self._context.start()
+        # Register the driver to stop.
+        async def _stop_driver():
+            self._driver.stop(force=True)
+            await self._driver.wait()
+        self._drain_hooks.append(_stop_driver)
 
         # Now that the process is started, setup the server.
         app = web.Application([
