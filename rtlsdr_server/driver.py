@@ -96,15 +96,18 @@ class AbstractRtlDriver(object):
                 self.stop(force=True)
                 # This should work cleanly now.
                 await stop_fut
+            logger.info("Shutdown current RTL-FM pipeline.")
 
         # At this point, the process is stopped, so update the frequency.
         self._frequency = frequency
+
+        logger.info("Changing frequency to: %s", self._frequency)
 
         # Clear stderr, since the process is starting fresh.
         self.reset()
 
         # Start the process up again.
-        await self.start(frequency)
+        await self.start(self._frequency)
 
     async def process_request(self, req_handler, fmt):
         raise NotImplementedError()
@@ -232,6 +235,7 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
                 await stream.write(buff[:count])
         except iostream.StreamClosedError:
             logger.info("Closing connection.")
+            stream.close()
         except Exception:
             logger.exception("Unexpected exception!")
         finally:

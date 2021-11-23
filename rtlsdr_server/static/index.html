@@ -11,15 +11,12 @@
 		the station, and playing it back via the web browser.
 	</p>
 	<audio controls>
-<!--
-		<source src="/radio/audio.mp3?timeout=5" type="audio/mpeg">
--->
 		<source src="/radio" type="audio/mpeg">
 		Your browser does not support the audio tag.
 	</audio>
 	<div>
 		<h2>Tuner</h2>
-		<div id="tuner-element"></div>
+		<div>Current frequency: <span id="tuner-element"></span></div>
 		<form method="POST" action="/api/frequency">
 			<label for="change-freq">New Frequency:</label>
 			<input type="text" id="change-freq" name="frequency">
@@ -45,7 +42,7 @@
 	</div>
 	<div>
 		<h2>Log</h2>
-		<div id="log-element"></div>
+		<div id="log-element" style="white-space: pre-wrap;"></div>
 		<script type="text/javascript">
 			async function updateLog() {
 				let data = {};
