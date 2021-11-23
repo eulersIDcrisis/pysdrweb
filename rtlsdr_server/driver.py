@@ -178,27 +178,38 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
         # supports GET, since that is all that should be necessary.
         parsed_status_line = False
         headers = httputil.HTTPHeaders()
+        data = asyncio.Queue()
+        write_fut = None
         try:
             def handle_header(line):
+                nonlocal parsed_status_line
+                if not parsed_status_line:
+                    res = httputil.parse_response_start_line(line)
+                    req_handler.set_status(res.code, res.reason)
+                    parsed_status_line = True
+                    return
+
                 if line == '\r\n' or line == '\n':
                     for name, header in headers.items():
                         req_handler.set_header(name, header)
                     return
-                nonlocal parsed_status_line
-                if not parsed_status_line:
-                    res = httputil.parse_response_start_line(line)
-                    parsed_status_line = True
-                    req_handler.set_status(res.code, res.reason)
-                else:
-                    headers.parse_line(line)
+                headers.parse_line(line)
 
-            # Make the proxied request.
+            async def handle_data_chunk():
+                while True:
+                    chunk = await data.get()
+                    if chunk is None:
+                        return
+                    req_handler.write(chunk)
+                    await req_handler.flush()
+            write_fut = asyncio.create_task(handle_data_chunk())
+
             await httpclient.AsyncHTTPClient().fetch(
                 httpclient.HTTPRequest(
-                    # 'http://localhost:8080/server.py',
-                    self._client_url,
+                    'http://localhost:8080/server.py',
+                    # self._client_url,
                     header_callback=handle_header,
-                    streaming_callback=req_handler.write)
+                    streaming_callback=data.put_nowait)
             )
         except httpclient.HTTPError as exc:
             req_handler.set_status(exc.code)
@@ -213,6 +224,11 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
             logger.exception('Error proxying to Icecast server!')
             req_handler.set_status(500)
             req_handler.write(dict(status=500, message="Internal Server Error."))
+        finally:
+            if write_fut:
+                data.put_nowait(None)
+                await write_fut
+                write_fut.cancel()
 
 
 async def find_executable(cmd):
