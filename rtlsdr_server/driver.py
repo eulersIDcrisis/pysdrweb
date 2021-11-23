@@ -181,6 +181,8 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
         try:
             def handle_header(line):
                 if line == '\r\n' or line == '\n':
+                    for name, header in headers.items():
+                        req_handler.set_header(name, header)
                     return
                 nonlocal parsed_status_line
                 if not parsed_status_line:
@@ -193,6 +195,7 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
             # Make the proxied request.
             await httpclient.AsyncHTTPClient().fetch(
                 httpclient.HTTPRequest(
+                    # 'http://localhost:8080/server.py',
                     self._client_url,
                     header_callback=handle_header,
                     streaming_callback=req_handler.write)
