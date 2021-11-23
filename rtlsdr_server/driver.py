@@ -206,8 +206,8 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
 
             await httpclient.AsyncHTTPClient().fetch(
                 httpclient.HTTPRequest(
-                    'http://localhost:8080/server.py',
-                    # self._client_url,
+                    # 'http://localhost:8080/server.py',
+                    self._client_url,
                     header_callback=handle_header,
                     streaming_callback=data.put_nowait)
             )
