@@ -164,7 +164,7 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
         sox_read_fd, sox_write_fd = os.pipe()
         sox_proc = await asyncio.create_subprocess_exec(
             *sox_cmd, stdin=rtl_read_fd,
-            # stdout=sox_write_fd,
+            stdout=sox_write_fd,
             stderr=subprocess.PIPE
         )
         asyncio.create_task(_read_into_buffer(sox_proc.stderr, self._stderr_buffer))
