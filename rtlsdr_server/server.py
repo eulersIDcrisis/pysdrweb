@@ -11,7 +11,6 @@ import argparse
 import traceback
 import subprocess
 from urllib.parse import urlsplit, urlunsplit
-import click
 from tornado import web, ioloop, httpclient, httpserver, netutil
 
 from driver import (
