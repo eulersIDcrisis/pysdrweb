@@ -26,6 +26,7 @@ async def _read_into_buffer(read_stream, buffer, encoding='utf-8'):
         data = await read_stream.readline()
         if not data:
             print("READ EMPTY")
+            print("EOF: ", read_stream.at_eof())
             return
 
         if encoding:
