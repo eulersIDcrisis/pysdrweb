@@ -187,9 +187,7 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
             # Now, open a raw TCP connection to the Icecast server and send
             # the HTTP request manually. This helps reduce the buffering on
             # the response.
-            url = self._client_url
-            url = 'http://localhost:8000/server.py'
-            _, netloc, path, _, _ = urlsplit(url)
+            _, netloc, path, _, _ = urlsplit(self._client_url)
             args = netloc.split(':', 1)
             if len(args) == 1:
                 host = args[0]
