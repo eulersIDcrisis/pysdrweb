@@ -146,8 +146,10 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
         self._sox_exec_path = config.get('sox', '/usr/local/bin/sox')
 
         self._ffmpeg_exec_path = config.get('ffmpeg', '/usr/local/bin/ffmpeg')
-        self._icecast_url = 'icecast://source:hackme@localhost:8000/radio'
-        self._client_url = 'http://localhost:8000/radio'
+        self._icecast_url = config.get(
+            'icecast_url', 'icecast://source:hackme@localhost:8000/radio')
+        self._client_url = config.get(
+            'client_url', 'http://localhost:8000/radio')
 
         self._stderr_fut = None
         self._stderr_buffer = deque()
