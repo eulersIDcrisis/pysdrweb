@@ -8,7 +8,9 @@ import logging
 import asyncio
 import subprocess
 from collections import deque
-from tornado import httpclient, httputil
+from contextlib import AsyncExitStack
+from urllib.parse import urlsplit
+from tornado import httpclient, httputil, iostream, tcpclient
 
 
 logger = logging.getLogger('driver')
@@ -176,59 +178,70 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
     async def process_request(self, req_handler, fmt):
         # Proxy this request to the icecast server. This currently only
         # supports GET, since that is all that should be necessary.
-        parsed_status_line = False
-        headers = httputil.HTTPHeaders()
-        data = asyncio.Queue()
-        write_fut = None
+        #
+        # For this case, we detach entirely from 'req_handler' so we can
+        # send the raw contents (with minimal buffering) from the icecast
+        # server.
+        icecast_socket = None
         try:
-            def handle_header(line):
-                nonlocal parsed_status_line
-                if not parsed_status_line:
-                    res = httputil.parse_response_start_line(line)
-                    req_handler.set_status(res.code, res.reason)
-                    parsed_status_line = True
-                    return
+            # Now, open a raw TCP connection to the Icecast server and send
+            # the HTTP request manually. This helps reduce the buffering on
+            # the response.
+            url = self._client_url
+            url = 'http://localhost:8000/server.py'
+            _, netloc, path, _, _ = urlsplit(url)
+            args = netloc.split(':', 1)
+            if len(args) == 1:
+                host = args[0]
+                port = 80
+            else:
+                host = args[0]
+                port = int(args[1])
 
-                if line == '\r\n' or line == '\n':
-                    for name, header in headers.items():
-                        req_handler.set_header(name, header)
-                    return
-                headers.parse_line(line)
-
-            async def handle_data_chunk():
-                while True:
-                    chunk = await data.get()
-                    if chunk is None:
-                        return
-                    req_handler.write(chunk)
-                    await req_handler.flush()
-            write_fut = asyncio.create_task(handle_data_chunk())
-
-            await httpclient.AsyncHTTPClient().fetch(
-                httpclient.HTTPRequest(
-                    # 'http://localhost:8080/server.py',
-                    self._client_url,
-                    header_callback=handle_header,
-                    streaming_callback=data.put_nowait)
-            )
-        except httpclient.HTTPError as exc:
-            req_handler.set_status(exc.code)
-            # Write the headers.
-            for name, header in exc.response.headers.items():
-                if name.upper() in ['SERVER']:
-                    continue
-                req_handler.set_header(name, header)
-            # Write the response.
-            req_handler.write(exc.response.body)
+            icecast_socket = await tcpclient.TCPClient().connect(
+                host, port)
         except Exception:
-            logger.exception('Error proxying to Icecast server!')
+            # If the connection fails, then return a 500 status code.
+            logger.exception("Error!")
             req_handler.set_status(500)
-            req_handler.write(dict(status=500, message="Internal Server Error."))
+            req_handler.write(dict(
+                status=500, message="Internal Server Error!"))
+            return
+
+        # At this point, we have a connection, so manually handle the stream
+        # to avoid default buffering issues, which is what this 'detach()'
+        # call does.
+        stream = req_handler.detach()
+        try:
+            # Write a basic HTTP request. Note that the headers are determined
+            # loosely by curling the icecast server.
+            req_line = 'GET {} HTTP/1.1\r\n'.format(path)
+            await icecast_socket.write(req_line.encode('utf-8'))
+            # Write the headers.
+            host_line = 'Host: {}\r\n'.format(netloc)
+            await icecast_socket.write(host_line.encode('utf-8'))
+            # For now, we'll just assume this is a 'curl' connection. We can
+            # change this later, but it works for now. Icecast probably does
+            # not care too much about this header.
+            await icecast_socket.write(b'User-Agent: curl/7.68.0\r\n')
+            await icecast_socket.write(b'Accept: */*\r\n')
+            # End of the headers.
+            await icecast_socket.write(b'\r\n')
+            # At this point, we should read the response. Read in chunks of
+            # 1024 bytes; this buffer is small enough to return in realtime.
+            buff = bytearray(1024)
+            while True:
+                count = await icecast_socket.read_into(buff, partial=True)
+                await stream.write(buff[:count])
+        except iostream.StreamClosedError:
+            logger.info("Closing connection.")
+        except Exception:
+            logger.exception("Unexpected exception!")
         finally:
-            if write_fut:
-                data.put_nowait(None)
-                await write_fut
-                write_fut.cancel()
+            # Close the connection to the icecast server, then close the other
+            # connections as appropriate.
+            if icecast_socket:
+                icecast_socket.close()
 
 
 async def find_executable(cmd):
