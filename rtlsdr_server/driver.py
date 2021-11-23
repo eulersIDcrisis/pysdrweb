@@ -77,6 +77,10 @@ class AbstractRtlDriver(object):
             return self._proc.returncode
         print("WAITING FOR EXIT")
         await self._proc.wait()
+        # HACKY: There is apparently a bug with how asyncio tries to handle
+        # shell subprocesses. This is one proposed fix for now. See here:
+        # https://bugs.python.org/issue43884
+        self._proc._transport.close()
         code = self._proc.returncode
         print("AFTER WAITING FOR EXIT. RETCODE: ", code)
         return code
