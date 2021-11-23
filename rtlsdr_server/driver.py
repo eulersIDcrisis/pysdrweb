@@ -101,28 +101,7 @@ class AbstractRtlDriver(object):
         await self.start(frequency)
 
     async def process_request(self, req_handler, fmt):
-        # Proxy this request to the icecast server. This currently only
-        # supports GET, since that is all that should be necessary.
-        icecast_url = 'http://localhost:9000/serdsver.py'
-        try:
-            # Make the proxied request.
-            await httpclient.AsyncHTTPClient().fetch(
-                httpclient.HTTPRequest(
-                    icecast_url, streaming_callback=req_handler.write)
-            )
-        except httpclient.HTTPError as exc:
-            req_handler.set_status(exc.code)
-            # Write the headers.
-            for name, header in exc.response.headers.items():
-                if name.upper() in ['SERVER']:
-                    continue
-                req_handler.set_header(name, header)
-            # Write the response.
-            req_handler.write(exc.response.body)
-        except Exception:
-            logger.exception('Error proxying to Icecast server!')
-            req_handler.set_status(500)
-            req_handler.write(dict(status=500, message="Internal Server Error."))        
+        raise NotImplementedError()
 
 
 class IcecastRtlFMDriver(AbstractRtlDriver):
@@ -188,6 +167,29 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
             self._proc.stderr, self._stderr_buffer
         ))
         self._frequency = frequency
+
+    async def process_request(self, req_handler, fmt):
+        # Proxy this request to the icecast server. This currently only
+        # supports GET, since that is all that should be necessary.
+        try:
+            # Make the proxied request.
+            await httpclient.AsyncHTTPClient().fetch(
+                httpclient.HTTPRequest(
+                    self._client_url, streaming_callback=req_handler.write)
+            )
+        except httpclient.HTTPError as exc:
+            req_handler.set_status(exc.code)
+            # Write the headers.
+            for name, header in exc.response.headers.items():
+                if name.upper() in ['SERVER']:
+                    continue
+                req_handler.set_header(name, header)
+            # Write the response.
+            req_handler.write(exc.response.body)
+        except Exception:
+            logger.exception('Error proxying to Icecast server!')
+            req_handler.set_status(500)
+            req_handler.write(dict(status=500, message="Internal Server Error."))
 
 
 async def find_executable(cmd):
