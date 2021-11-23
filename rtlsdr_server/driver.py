@@ -57,16 +57,13 @@ class AbstractRtlDriver(object):
     async def start(self, frequency):
         raise NotImplementedError()
 
-    def stop(self, force=False):
+    def stop(self):
         if not self._proc:
             return
         # Process already exited. Nothing to stop.
         if self._proc.returncode is not None:
             return
-        if force:
-            self._proc.kill()
-        else:
-            self._proc.terminate()
+        self._proc.kill()
 
     async def wait(self):
         if not self._proc:
@@ -83,7 +80,7 @@ class AbstractRtlDriver(object):
     async def change_frequency(self, frequency, timeout=5):
         if self.is_running():
             logger.info("Stopping RTL-FM pipeline.")
-            self.stop(force=True)
+            self.stop()
             await self.wait()
             logger.info("Shutdown current RTL-FM pipeline.")
 
@@ -166,8 +163,10 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
         ))
         self._frequency = frequency
 
-    def stop(self, force=False):
-        super().stop(force=force)
+    def stop(self):
+        super(IcecastRtlFMDriver, self).stop()
+        if self._proc:
+            print("AT EOF: ", self._proc.stderr.at_eof())
         if self._stderr_fut:
             self._stderr_fut.cancel()
 

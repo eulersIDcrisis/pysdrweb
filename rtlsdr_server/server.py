@@ -148,7 +148,7 @@ class Server(object):
         await self._driver.start(frequency)
         # Register the driver to stop.
         async def _stop_driver():
-            self._driver.stop(force=True)
+            self._driver.stop()
             await self._driver.wait()
         self._drain_hooks.append(_stop_driver)
 
