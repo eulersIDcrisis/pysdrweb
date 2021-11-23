@@ -46,13 +46,16 @@ class FrequencyHandler(BaseRequestHandler):
     async def post(self):
         try:
             new_freq = self.get_argument('frequency')
+            logger.info("PARSED FREQ: %s", new_freq)
         except Exception:
             self.send_status(400, 'Bad arguments!')
             return
 
         try:
             driver = self.get_driver()
+            logger.info("STARTING to change frequency")
             await driver.change_frequency(new_freq)
+            logger.info("done changing frequency")
             # Redirect back to the main page to refresh it.
             self.redirect('/')
         except Exception:

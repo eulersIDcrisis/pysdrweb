@@ -84,6 +84,7 @@ class AbstractRtlDriver(object):
 
     async def change_frequency(self, frequency, timeout=5):
         if self.is_running():
+            logger.info("Stopping RTL-FM pipeline.")
             self.stop(force=True)
             await self.wait()
             logger.info("Shutdown current RTL-FM pipeline.")
