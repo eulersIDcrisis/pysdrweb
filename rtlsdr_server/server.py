@@ -231,6 +231,9 @@ def run():
     # Setup logging.
     logging.basicConfig(level=level)
 
+    # Set the port.
+    port = args.port
+
     # Parse the executable paths.
     if args.rtl_fm:
         rtl_path = args.rtl_fm
@@ -259,7 +262,7 @@ def run():
     )
     driver = IcecastRtlFMDriver(config)
 
-    server = Server(driver)
+    server = Server(driver, port=port)
     def _sighandler(signum, stack_frame):
         server.stop(from_signal_handler=True)
 
