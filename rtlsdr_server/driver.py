@@ -61,10 +61,12 @@ class AbstractRtlDriver(object):
         raise NotImplementedError()
 
     def stop(self):
+        print("STOP PROC IN DRIVER: ", self._proc)
         if not self._proc:
             return
         # Process already exited. Nothing to stop.
         if self._proc.returncode is not None:
+            print("RETCODE: ", self._proc.returncode)
             return
         self._proc.kill()
 
@@ -73,8 +75,10 @@ class AbstractRtlDriver(object):
             return None
         if self._proc.returncode is not None:
             return self._proc.returncode
+        print("WAITING FOR EXIT")
         await self._proc.wait()
         code = self._proc.returncode
+        print("AFTER WAITING FOR EXIT. RETCODE: ", code)
         return code
 
     async def reset(self):
@@ -84,7 +88,11 @@ class AbstractRtlDriver(object):
         if self.is_running():
             logger.info("Stopping RTL-FM pipeline.")
             self.stop()
+            print("BEFORE PIPELINE WAIT")
             await self.wait()
+            print("AFTER PIPELINE WAIT")
+            print("PIPE RETCODE: ", self._proc.returncode)
+            await asyncio.sleep(1.0)
             logger.info("Shutdown current RTL-FM pipeline.")
 
         # At this point, the process is stopped, so update the frequency.

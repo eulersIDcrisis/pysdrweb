@@ -10,6 +10,9 @@ import sys
 import configparser
 
 
+RTLSDR_SERVER_VERSION = '0.1.0'
+
+
 def load_config(path):
     parser = configparser.ConfigParser()
     with open(path, 'r') as stm:
