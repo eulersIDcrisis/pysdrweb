@@ -88,7 +88,7 @@ class AbstractRtlDriver(object):
             print("BEFORE PIPELINE WAIT")
             await self.wait()
             print("AFTER PIPELINE WAIT")
-            print("PIPE RETCODE: ", self._proc.returncode)
+            # print("PIPE RETCODE: ", self._proc.returncode)
             await asyncio.sleep(1.0)
             logger.info("Shutdown current RTL-FM pipeline.")
 
