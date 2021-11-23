@@ -8,7 +8,7 @@ import logging
 import asyncio
 import subprocess
 from collections import deque
-from tornado import httpclient
+from tornado import httpclient, httputil
 
 
 logger = logging.getLogger('driver')
@@ -176,11 +176,26 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
     async def process_request(self, req_handler, fmt):
         # Proxy this request to the icecast server. This currently only
         # supports GET, since that is all that should be necessary.
+        parsed_status_line = False
+        headers = httputil.HTTPHeaders()
         try:
+            def handle_header(line):
+                if line == '\r\n' or line == '\n':
+                    return
+                nonlocal parsed_status_line
+                if not parsed_status_line:
+                    res = httputil.parse_response_start_line(line)
+                    parsed_status_line = True
+                    req_handler.set_status(res.code, res.reason)
+                else:
+                    headers.parse_line(line)
+
             # Make the proxied request.
             await httpclient.AsyncHTTPClient().fetch(
                 httpclient.HTTPRequest(
-                    self._client_url, streaming_callback=req_handler.write)
+                    self._client_url,
+                    header_callback=handle_header,
+                    streaming_callback=req_handler.write)
             )
         except httpclient.HTTPError as exc:
             req_handler.set_status(exc.code)
