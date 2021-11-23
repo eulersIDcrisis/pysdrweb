@@ -34,11 +34,16 @@ async def _read_into_buffer(read_stream, buffer, encoding='utf-8'):
         buffer.append(data)
 
 
+async def _wait_for_exit(proc, stm):
+    await proc.wait()
+    os.close(stm)
+
+
 class AbstractRtlDriver(object):
 
     def __init__(self, formats):
         self._supported_formats = set(formats)
-        self._proc = None
+        self._processes = []
         self._frequency = '107.3M'
 
     @property
@@ -50,8 +55,9 @@ class AbstractRtlDriver(object):
         return self._frequency
 
     def is_running(self):
-        if self._proc:
-            return self._proc.returncode is None
+        for proc in self._processes:
+            if proc.returncode is None:
+                return True
         return False
 
     def get_log(self):
@@ -61,29 +67,16 @@ class AbstractRtlDriver(object):
         raise NotImplementedError()
 
     def stop(self):
-        print("STOP PROC IN DRIVER: ", self._proc)
-        if not self._proc:
-            return
-        # Process already exited. Nothing to stop.
-        if self._proc.returncode is not None:
-            print("RETCODE: ", self._proc.returncode)
-            return
-        self._proc.kill()
+        for proc in self._processes:
+            if proc.returncode is None:
+                proc.terminate()
 
     async def wait(self):
-        if not self._proc:
-            return None
-        if self._proc.returncode is not None:
-            return self._proc.returncode
-        print("WAITING FOR EXIT")
-        await self._proc.wait()
-        # HACKY: There is apparently a bug with how asyncio tries to handle
-        # shell subprocesses. This is one proposed fix for now. See here:
-        # https://bugs.python.org/issue43884
-        self._proc._transport.close()
-        code = self._proc.returncode
-        print("AFTER WAITING FOR EXIT. RETCODE: ", code)
-        return code
+        if self._processes:
+            await asyncio.gather(*[
+                asyncio.create_task(proc.wait())
+                for proc in self._processes
+            ])
 
     async def reset(self):
         pass
@@ -157,33 +150,47 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
             self._rtlfm_exec_path, '-f', frequency, '-s',
             '200k', '-r', '48k', '-A', 'fast', '-'
         ]
+        rtl_read_fd, rtl_write_fd = os.pipe()
+        rtl_proc = await asyncio.create_subprocess_exec(
+            *rtl_cmd, stdout=rtl_write_fd, stderr=subprocess.PIPE
+        )
+        asyncio.create_task(_read_into_buffer(rtl_proc.stderr, self._stderr_buffer))
+        asyncio.create_task(_wait_for_exit(rtl_proc, rtl_write_fd))
+
         sox_cmd = [
             self._sox_exec_path, '-t', 'raw', '-r', '48k', '-es',
             '-b', '16', '-c', '1', '-V1', '-', '-t', 'mp3', '-'
         ]
+        sox_read_fd, sox_write_fd = os.pipe()
+        sox_proc = await asyncio.create_subprocess_exec(
+            *sox_cmd, stdin=rtl_read_fd,
+            # stdout=sox_write_fd,
+            stderr=subprocess.PIPE
+        )
+        asyncio.create_task(_read_into_buffer(sox_proc.stderr, self._stderr_buffer))
+        asyncio.create_task(_wait_for_exit(sox_proc, sox_write_fd))
+        # self._processes.extend([rtl_proc, sox_proc])
+
         ffmpeg_cmd = [
             self._ffmpeg_exec_path, '-i', '-', '-f', 'mp3', '-v', '24',
             self._icecast_url
         ]
-        cmd = ' | '.join([
-            shlex.join(rtl_cmd),
-            shlex.join(sox_cmd),
-            shlex.join(ffmpeg_cmd)
-        ])
-        logger.info("Running: %s", cmd)
-        self._proc = await asyncio.create_subprocess_shell(
-            cmd, stderr=subprocess.PIPE, start_new_session=True)
-        self._stderr_fut = asyncio.create_task(_read_into_buffer(
-            self._proc.stderr, self._stderr_buffer
-        ))
-        self._frequency = frequency
+        ffmpeg_proc = await asyncio.create_subprocess_exec(
+            *ffmpeg_cmd, stdin=sox_read_fd, stderr=subprocess.PIPE)
+        self._processes.extend([rtl_proc, sox_proc, ffmpeg_proc])
 
-    def stop(self):
-        super(IcecastRtlFMDriver, self).stop()
-        if self._proc:
-            print("AT EOF: ", self._proc.stderr.at_eof())
-        if self._stderr_fut:
-            self._stderr_fut.cancel()
+        # cmd = ' | '.join([
+        #     shlex.join(rtl_cmd),
+        #     shlex.join(sox_cmd),
+        #     shlex.join(ffmpeg_cmd)
+        # ])
+        # logger.info("Running: %s", cmd)
+        # self._proc = await asyncio.create_subprocess_shell(
+        #     cmd, stderr=subprocess.PIPE, start_new_session=True)
+        # self._stderr_fut = asyncio.create_task(_read_into_buffer(
+        #     self._proc.stderr, self._stderr_buffer
+        # ))
+        self._frequency = frequency
 
     async def process_request(self, req_handler, fmt):
         # Proxy this request to the icecast server. This currently only
