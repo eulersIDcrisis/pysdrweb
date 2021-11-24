@@ -22,11 +22,8 @@ class UnsupportedFormatError(Exception):
 
 async def _read_into_buffer(read_stream, buffer, encoding='utf-8'):
     while not read_stream.at_eof():
-        print("Waiting for data")
         data = await read_stream.readline()
         if not data:
-            print("READ EMPTY")
-            print("EOF: ", read_stream.at_eof())
             return
 
         if encoding:
@@ -85,10 +82,7 @@ class AbstractRtlDriver(object):
         if self.is_running():
             logger.info("Stopping RTL-FM pipeline.")
             self.stop()
-            print("BEFORE PIPELINE WAIT")
             await self.wait()
-            print("AFTER PIPELINE WAIT")
-            # print("PIPE RETCODE: ", self._proc.returncode)
             await asyncio.sleep(1.0)
             logger.info("Shutdown current RTL-FM pipeline.")
 
