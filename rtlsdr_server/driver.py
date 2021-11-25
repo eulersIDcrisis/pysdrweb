@@ -91,6 +91,7 @@ class AbstractRtlDriver(object):
             await self.wait()
         self._futures = []
         self._processes = []
+        self._log.clear()
 
     async def change_frequency(self, frequency, timeout=5):
         # Reset the driver first, before starting it up again.
@@ -133,11 +134,6 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
             'icecast_url', 'icecast://source:hackme@localhost:8000/radio')
         self._client_url = config.get(
             'client_url', 'http://localhost:8000/radio')
-
-    def reset(self):
-        # Reset the 'stderr' buffer, since we are starting a new process,
-        # unless explicitly configured not to do so.
-        self._stderr_buffer.clear()
 
     async def start(self, frequency):
         rtl_cmd = [
