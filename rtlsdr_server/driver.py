@@ -176,7 +176,7 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
         ]
         ffmpeg_proc = await asyncio.create_subprocess_exec(
             *ffmpeg_cmd, stdin=sox_read_fd, stderr=subprocess.PIPE)
-        self.add_process_handle(ffmpeg_cmd)
+        self.add_process_handle(ffmpeg_proc)
         self.add_awaitable(asyncio.create_task(
             _read_into_buffer(ffmpeg_proc.stderr, self._log)))
 
