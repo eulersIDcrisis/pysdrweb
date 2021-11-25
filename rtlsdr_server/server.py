@@ -46,17 +46,16 @@ class FrequencyHandler(BaseRequestHandler):
     async def post(self):
         try:
             new_freq = self.get_argument('frequency')
-            logger.info("PARSED FREQ: %s", new_freq)
         except Exception:
             self.send_status(400, 'Bad arguments!')
             return
 
         try:
             driver = self.get_driver()
-            logger.info("STARTING to change frequency")
             await driver.change_frequency(new_freq)
-            logger.info("done changing frequency")
-            # Redirect back to the main page to refresh it.
+            # Redirect back to the main page to refresh it, but stall so the
+            # driver has a chance to start up.
+            await asyncio.sleep(2.0)
             self.redirect('/')
         except Exception:
             logger.exception('Error updating frequency!')
@@ -74,18 +73,6 @@ class ContextInfoHandler(BaseRequestHandler):
             logger.exception('Error fetching context/driver information!')
             self.set_status(500)
             self.write(dict(status=500, message="Internal Server Error"))
-
-
-class IcecastProxyHandler(BaseRequestHandler):
-
-    async def get(self, ext):
-        if not ext:
-            ext = 'mp3'
-
-        logger.info("Using extension: %s", ext)
-        driver = self.get_driver()
-        # The driver takes total control of the request at this point.
-        await driver.process_request(self, ext)
 
 
 class ProcessAudioHandler(BaseRequestHandler):

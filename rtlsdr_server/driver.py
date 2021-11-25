@@ -41,7 +41,9 @@ class AbstractRtlDriver(object):
     def __init__(self, formats):
         self._supported_formats = set(formats)
         self._processes = []
+        self._futures = []
         self._frequency = '107.3M'
+        self._log = deque()
 
     @property
     def supported_formats(self):
@@ -58,7 +60,18 @@ class AbstractRtlDriver(object):
         return False
 
     def get_log(self):
-        return ''
+        return ''.join(self._log)
+
+    def add_log_line(self, line):
+        self._log.append(line)
+
+    def add_process_handle(self, proc_handle):
+        self._processes.append(proc_handle)
+        # Also await the process in a future.
+        self._futures.append(asyncio.create_task(proc_handle.wait()))
+
+    def add_awaitable(self, fut):
+        self._futures.append(fut)
 
     async def start(self, frequency):
         raise NotImplementedError()
@@ -69,30 +82,24 @@ class AbstractRtlDriver(object):
                 proc.terminate()
 
     async def wait(self):
-        if self._processes:
-            await asyncio.gather(*[
-                asyncio.create_task(proc.wait())
-                for proc in self._processes
-            ])
+        if self._futures:
+            await asyncio.gather(*self._futures)
 
     async def reset(self):
-        pass
-
-    async def change_frequency(self, frequency, timeout=5):
         if self.is_running():
-            logger.info("Stopping RTL-FM pipeline.")
             self.stop()
             await self.wait()
-            await asyncio.sleep(1.0)
-            logger.info("Shutdown current RTL-FM pipeline.")
+        self._futures = []
+        self._processes = []
 
-        # At this point, the process is stopped, so update the frequency.
-        self._frequency = frequency
+    async def change_frequency(self, frequency, timeout=5):
+        # Reset the driver first, before starting it up again.
+        await self.reset()
 
         logger.info("Changing frequency to: %s", self._frequency)
 
-        # Clear stderr, since the process is starting fresh.
-        self.reset()
+        # At this point, the process is stopped, so update the frequency.
+        self._frequency = frequency
 
         # Start the process up again.
         await self.start(self._frequency)
@@ -120,19 +127,12 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
         super(IcecastRtlFMDriver, self).__init__(['mp3'])
         self._rtlfm_exec_path = config.get('rtl_fm', '/usr/local/bin/rtl_fm')
         self._sox_exec_path = config.get('sox', '/usr/local/bin/sox')
-
         self._ffmpeg_exec_path = config.get('ffmpeg', '/usr/local/bin/ffmpeg')
+
         self._icecast_url = config.get(
             'icecast_url', 'icecast://source:hackme@localhost:8000/radio')
         self._client_url = config.get(
             'client_url', 'http://localhost:8000/radio')
-
-        self._stderr_fut = None
-        self._stderr_buffer = deque()
-        self._stderr_encoding = 'utf-8'
-
-    def get_log(self):
-        return ''.join(self._stderr_buffer)
 
     def reset(self):
         # Reset the 'stderr' buffer, since we are starting a new process,
@@ -148,8 +148,11 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
         rtl_proc = await asyncio.create_subprocess_exec(
             *rtl_cmd, stdout=rtl_write_fd, stderr=subprocess.PIPE
         )
-        asyncio.create_task(_read_into_buffer(rtl_proc.stderr, self._stderr_buffer))
-        asyncio.create_task(_wait_for_exit(rtl_proc, rtl_write_fd))
+        self.add_process_handle(rtl_proc)
+        self.add_awaitable(asyncio.create_task(
+            _read_into_buffer(rtl_proc.stderr, self._log)))
+        self.add_awaitable(asyncio.create_task(
+            _wait_for_exit(rtl_proc, rtl_write_fd)))
 
         sox_cmd = [
             self._sox_exec_path, '-t', 'raw', '-r', '48k', '-es',
@@ -161,9 +164,11 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
             stdout=sox_write_fd,
             stderr=subprocess.PIPE
         )
-        asyncio.create_task(_read_into_buffer(sox_proc.stderr, self._stderr_buffer))
-        asyncio.create_task(_wait_for_exit(sox_proc, sox_write_fd))
-        # self._processes.extend([rtl_proc, sox_proc])
+        self.add_process_handle(sox_proc)
+        self.add_awaitable(asyncio.create_task(
+            _read_into_buffer(sox_proc.stderr, self._log)))
+        self.add_awaitable(asyncio.create_task(
+            _wait_for_exit(sox_proc, sox_write_fd)))
 
         ffmpeg_cmd = [
             self._ffmpeg_exec_path, '-i', '-', '-f', 'mp3', '-v', '24',
@@ -171,19 +176,10 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
         ]
         ffmpeg_proc = await asyncio.create_subprocess_exec(
             *ffmpeg_cmd, stdin=sox_read_fd, stderr=subprocess.PIPE)
-        self._processes.extend([rtl_proc, sox_proc, ffmpeg_proc])
+        self.add_process_handle(ffmpeg_cmd)
+        self.add_awaitable(asyncio.create_task(
+            _read_into_buffer(ffmpeg_proc.stderr, self._log)))
 
-        # cmd = ' | '.join([
-        #     shlex.join(rtl_cmd),
-        #     shlex.join(sox_cmd),
-        #     shlex.join(ffmpeg_cmd)
-        # ])
-        # logger.info("Running: %s", cmd)
-        # self._proc = await asyncio.create_subprocess_shell(
-        #     cmd, stderr=subprocess.PIPE, start_new_session=True)
-        # self._stderr_fut = asyncio.create_task(_read_into_buffer(
-        #     self._proc.stderr, self._stderr_buffer
-        # ))
         self._frequency = frequency
 
     async def process_request(self, req_handler, fmt):
