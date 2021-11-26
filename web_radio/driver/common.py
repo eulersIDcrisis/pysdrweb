@@ -2,6 +2,7 @@
 
 Common utilities for different web radio drivers.
 """
+import os
 import shlex
 import asyncio
 import subprocess
