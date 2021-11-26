@@ -37,7 +37,7 @@ async def close_pipe_on_exit(proc, fd):
     pipe needs to be explicitly closed for a clean shutdown.
     """
     await proc.wait()
-    os.close(stm)
+    os.close(fd)
 
 
 class AbstractRtlDriver(object):
