@@ -43,9 +43,10 @@ async def close_pipe_on_exit(proc, fd):
 class AbstractRtlDriver(object):
 
     def __init__(self, formats):
-        self._supported_formats = set(formats)
+        self._supported_formats = frozenset(formats)
         self._processes = []
         self._futures = []
+        self._shutdown_hooks = []
         self._frequency = '107.3M'
         self._log = deque()
 
@@ -77,6 +78,17 @@ class AbstractRtlDriver(object):
     def add_awaitable(self, fut):
         self._futures.append(fut)
 
+    def add_shutdown_handle(self, func):
+        """Register callback that runs after all processes and awaitables.
+
+        The input argument 'func' should be a simple callable function with
+        no arguments; it should _not_ be async.
+        """
+        if not callable(func):
+            raise TypeError(
+                "Arguemtn to add_shutdown_handle() must be callable!")
+        self._shutdown_hooks.append(func)
+
     async def start(self, frequency):
         raise NotImplementedError()
 
@@ -98,8 +110,11 @@ class AbstractRtlDriver(object):
         if self.is_running():
             self.stop()
             await self.wait()
+        for hook in self._shutdown_hooks:
+            hook()
         self._futures = []
         self._processes = []
+        self._shutdown_hooks = []
         self._log.clear()
 
     async def change_frequency(self, frequency, timeout=5):

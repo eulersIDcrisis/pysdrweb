@@ -9,7 +9,7 @@ however; this should be handled elsewhere.
 import os
 import asyncio
 from tornado import ioloop, httpserver, netutil, web
-from web_radio.util.logger import logger
+from pysdrweb.util.logger import logger
 
 
 class BaseRequestHandler(web.RequestHandler):

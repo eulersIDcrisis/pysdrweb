@@ -7,9 +7,9 @@ import logging
 import argparse
 from urllib.parse import urlsplit, urlunsplit
 from tornado import ioloop
-from web_radio.driver.common import find_executable
-from web_radio.driver.icecast import IcecastRtlFMDriver
-from web_radio.server.handlers import Server
+from pysdrweb.driver.common import find_executable
+from pysdrweb.driver.icecast import IcecastRtlFMDriver
+from pysdrweb.server.handlers import Server
 
 
 def run():

@@ -13,8 +13,8 @@ from urllib.parse import urlsplit, urlunsplit
 # External Imports
 from tornado import tcpclient
 # Local Imports
-from web_radio.util.logger import get_child_logger
-from web_radio.driver.common import (
+from pysdrweb.util.logger import get_child_logger
+from pysdrweb.driver.common import (
     AbstractRtlDriver, read_lines_from_stream, close_pipe_on_exit
 )
 
