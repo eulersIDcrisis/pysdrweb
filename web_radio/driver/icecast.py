@@ -1,112 +1,25 @@
-"""driver.py.
+"""icecast.py.
 
-Driver for different subprocesses in the server.
+Driver that proxies 'rtl_fm' output to an icecast server.
+
+Currently requires 'rtl_fm', 'sox', and 'ffmpeg' to be installed
+(with mpeg encoding capabilities). Future versions of this could
+support other things.
 """
 import os
-import shlex
-import logging
 import asyncio
 import subprocess
-from collections import deque
-from contextlib import AsyncExitStack
-from urllib.parse import urlsplit
-from tornado import httpclient, httputil, iostream, tcpclient
+from urllib.parse import urlsplit, urlunsplit
+# External Imports
+from tornado import tcpclient
+# Local Imports
+from web_radio.util.logger import get_child_logger
+from web_radio.driver.common import (
+    AbstractRtlDriver, read_lines_from_stream, close_pipe_on_exit
+)
 
-
-logger = logging.getLogger('driver')
-
-
-class UnsupportedFormatError(Exception):
-    """Exception indicating an unsupported format."""
-
-
-async def _read_into_buffer(read_stream, buffer, encoding='utf-8'):
-    while not read_stream.at_eof():
-        data = await read_stream.readline()
-        if not data:
-            return
-
-        if encoding:
-            data = data.decode(encoding)
-        buffer.append(data)
-
-
-async def _wait_for_exit(proc, stm):
-    await proc.wait()
-    os.close(stm)
-
-
-class AbstractRtlDriver(object):
-
-    def __init__(self, formats):
-        self._supported_formats = set(formats)
-        self._processes = []
-        self._futures = []
-        self._frequency = '107.3M'
-        self._log = deque()
-
-    @property
-    def supported_formats(self):
-        return self._supported_formats
-
-    @property
-    def frequency(self):
-        return self._frequency
-
-    def is_running(self):
-        for proc in self._processes:
-            if proc.returncode is None:
-                return True
-        return False
-
-    def get_log(self):
-        return ''.join(self._log)
-
-    def add_log_line(self, line):
-        self._log.append(line)
-
-    def add_process_handle(self, proc_handle):
-        self._processes.append(proc_handle)
-        # Also await the process in a future.
-        self._futures.append(asyncio.create_task(proc_handle.wait()))
-
-    def add_awaitable(self, fut):
-        self._futures.append(fut)
-
-    async def start(self, frequency):
-        raise NotImplementedError()
-
-    def stop(self):
-        for proc in self._processes:
-            if proc.returncode is None:
-                proc.terminate()
-
-    async def wait(self):
-        if self._futures:
-            await asyncio.gather(*self._futures)
-
-    async def reset(self):
-        if self.is_running():
-            self.stop()
-            await self.wait()
-        self._futures = []
-        self._processes = []
-        self._log.clear()
-
-    async def change_frequency(self, frequency, timeout=5):
-        # Reset the driver first, before starting it up again.
-        await self.reset()
-
-        logger.info("Changing frequency to: %s", self._frequency)
-
-        # At this point, the process is stopped, so update the frequency.
-        self._frequency = frequency
-
-        # Start the process up again.
-        await self.start(self._frequency)
-
-    async def process_request(self, req_handler, fmt):
-        raise NotImplementedError()
+# Set the logger for the icecast driver.
+logger = get_child_logger('icecast_driver')
 
 
 class IcecastRtlFMDriver(AbstractRtlDriver):
@@ -135,7 +48,9 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
         self._client_url = config.get(
             'client_url', 'http://localhost:8000/radio')
 
-    async def start(self, frequency):
+    async def start(self, frequency=None):
+        if frequency is None:
+            frequency = self._frequency
         rtl_cmd = [
             self._rtlfm_exec_path, '-f', frequency, '-s',
             '200k', '-r', '48k', '-A', 'fast', '-'
@@ -146,9 +61,9 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
         )
         self.add_process_handle(rtl_proc)
         self.add_awaitable(asyncio.create_task(
-            _read_into_buffer(rtl_proc.stderr, self._log)))
+            read_lines_from_stream(rtl_proc.stderr, self.add_log_line)))
         self.add_awaitable(asyncio.create_task(
-            _wait_for_exit(rtl_proc, rtl_write_fd)))
+            close_pipe_on_exit(rtl_proc, rtl_write_fd)))
 
         sox_cmd = [
             self._sox_exec_path, '-t', 'raw', '-r', '48k', '-es',
@@ -162,9 +77,9 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
         )
         self.add_process_handle(sox_proc)
         self.add_awaitable(asyncio.create_task(
-            _read_into_buffer(sox_proc.stderr, self._log)))
+            read_lines_from_stream(sox_proc.stderr, self.add_log_line)))
         self.add_awaitable(asyncio.create_task(
-            _wait_for_exit(sox_proc, sox_write_fd)))
+            close_pipe_on_exit(sox_proc, sox_write_fd)))
 
         ffmpeg_cmd = [
             self._ffmpeg_exec_path, '-i', '-', '-f', 'mp3', '-v', '24',
@@ -174,7 +89,7 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
             *ffmpeg_cmd, stdin=sox_read_fd, stderr=subprocess.PIPE)
         self.add_process_handle(ffmpeg_proc)
         self.add_awaitable(asyncio.create_task(
-            _read_into_buffer(ffmpeg_proc.stderr, self._log)))
+            read_lines_from_stream(ffmpeg_proc.stderr, self.add_log_line)))
 
         self._frequency = frequency
 
@@ -250,26 +165,3 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
             # connections as appropriate.
             if icecast_socket:
                 icecast_socket.close()
-
-
-async def find_executable(cmd):
-    cmd = shlex.join(['which', cmd])
-    proc = await asyncio.create_subprocess_shell(cmd, stdout=subprocess.PIPE)
-    stdout, _ = await proc.communicate()
-    # Decode 'stdout' and return it.
-    return stdout.decode('utf-8').strip()
-
-
-async def find_pipeline_commands():
-    rtl_fm_path, sox_path, ffmpeg_path = await asyncio.gather(
-        find_executable('rtl_fm'),
-        find_executable('sox'),
-        find_executable('ffmpeg'))
-
-    print("RTL FM: {}".format(rtl_fm_path))
-    print("SOX: {}".format(sox_path))
-    print("FFMPEG: {}".format(ffmpeg_path))
-
-
-if __name__ == '__main__':
-    asyncio.run(find_pipeline_commands())
