@@ -10,6 +10,7 @@ import os
 import asyncio
 from tornado import ioloop, httpserver, netutil, web
 from pysdrweb.util.logger import logger
+from pysdrweb.driver.common import UnsupportedFormatError
 
 
 class BaseRequestHandler(web.RequestHandler):
@@ -18,6 +19,7 @@ class BaseRequestHandler(web.RequestHandler):
         return self.application.settings['driver']
 
     def send_status(self, code, message):
+        self.set_status(code)
         self.write(dict(status=code, message=message))
 
 
@@ -71,6 +73,8 @@ class ProcessAudioHandler(BaseRequestHandler):
     async def get(self, ext):
         if not ext:
             ext = 'mp3'
+        if ext.startswith('.'):
+            ext = ext[1:]
         driver = self.get_driver()
         try:
             await driver.process_request(self, ext)

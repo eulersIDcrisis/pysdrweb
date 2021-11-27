@@ -9,6 +9,7 @@ from urllib.parse import urlsplit, urlunsplit
 from tornado import ioloop
 from pysdrweb.driver.common import find_executable
 from pysdrweb.driver.icecast import IcecastRtlFMDriver
+from pysdrweb.driver.rtl_native import RtlFMNativeDriver
 from pysdrweb.server.handlers import Server
 
 
@@ -68,7 +69,8 @@ def run():
         rtl_fm=rtl_path, sox=sox_path, ffmpeg=ffmpeg_path,
         icecast_url=args.icecast_url, client_url=client_url
     )
-    driver = IcecastRtlFMDriver(config)
+    # driver = IcecastRtlFMDriver(config)
+    driver = RtlFMNativeDriver(config)
 
     server = Server(driver, port=port)
     def _sighandler(signum, stack_frame):
