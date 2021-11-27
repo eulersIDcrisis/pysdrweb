@@ -140,11 +140,3 @@ def find_executable(cmd):
     if proc.stdout:
         return proc.stdout.decode('utf-8').strip()
     return None
-
-
-# async def find_executable(cmd):
-#     cmd = shlex.join(['which', cmd])
-#     proc = await asyncio.create_subprocess_shell(cmd, stdout=subprocess.PIPE)
-#     stdout, _ = await proc.communicate()
-#     # Decode 'stdout' and return it.
-#     return stdout.decode('utf-8').strip()

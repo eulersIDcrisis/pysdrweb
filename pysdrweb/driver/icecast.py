@@ -22,8 +22,23 @@ from pysdrweb.driver.common import (
 logger = get_child_logger('icecast_driver')
 
 
+def _remove_user_password_from_url(url):
+    """Remove User/password fields from URLs.
+
+    For example, this function would convert:
+        'http://source:hackme@localhost:8000/path'
+    to:
+        'http://localhost:8000/path'
+    """
+    scheme, netloc, path, query, fragment = urlsplit(url)
+    parts = netloc.split('@', 1)
+    if len(parts) > 1:
+        netloc = parts[0]
+    return urlunsplit((scheme, netloc, path, query, fragment))
+
+
 class IcecastRtlFMDriver(AbstractRtlDriver):
-    """Driver that runs rtl_fm through a pipeline to an Icecast server.
+    r"""Driver that runs rtl_fm through a pipeline to an Icecast server.
 
     This driver basically runs the following commands which should send
     audio data to an Icecast server:
@@ -35,18 +50,49 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
     the Icecast server internally, if desired.
     """
 
+    name = 'icecast'
+
+    @classmethod
+    def from_config(cls, config):
+        """Create the IcecastRtlFMDriver; scan for any missing paths.
+
+        This is different from the default constructor because this will
+        search for the paths if they are not found or set.
+        """
+        rtlfm = config.get('rtl_fm')
+        if not rtlfm:
+            rtlfm = find_executable('rtl_fm')
+            if not rtlfm:
+                raise Exception("Could not find path to: rtl_fm")
+            config['rtl_fm'] = rtlfm
+
+        sox = config.get('sox')
+        if not sox:
+            sox = find_executable('sox')
+            if not sox:
+                raise Exception("Could not find path to: sox")
+            config['sox'] = sox
+
+        ffmpeg = config.get('ffmpeg')
+        if not ffmpeg:
+            ffmpeg = find_executable('ffmpeg')
+            if not ffmpeg:
+                raise Exception("Could not find path to: ffmpeg")
+            config['ffmpeg'] = ffmpeg
+        return cls(config)
+
     def __init__(self, config):
         # Supported formats are technically based on the Icecast configuration
         # but for now, we'll assume MP3.
         super(IcecastRtlFMDriver, self).__init__(['mp3'])
-        self._rtlfm_exec_path = config.get('rtl_fm', '/usr/local/bin/rtl_fm')
-        self._sox_exec_path = config.get('sox', '/usr/local/bin/sox')
-        self._ffmpeg_exec_path = config.get('ffmpeg', '/usr/local/bin/ffmpeg')
+        self._rtlfm_exec_path = config['rtl_fm']
+        self._sox_exec_path = config['sox']
+        self._ffmpeg_exec_path = config['ffmpeg']
 
-        self._icecast_url = config.get(
-            'icecast_url', 'icecast://source:hackme@localhost:8000/radio')
-        self._client_url = config.get(
-            'client_url', 'http://localhost:8000/radio')
+        self._icecast_url = config['icecast_url']
+        # Calculate the client URL from the icecast URL, if not explicitly set.
+        default_client_url = _remove_user_password_from_url(self._icecast_url)
+        self._client_url = config.get('client_url', default_client_url)
 
     async def start(self, frequency=None):
         if frequency is None:

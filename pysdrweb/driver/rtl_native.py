@@ -20,7 +20,7 @@ from tornado import iostream
 from pysdrweb.util.logger import get_child_logger
 from pysdrweb.driver.common import (
     AbstractRtlDriver, read_lines_from_stream,
-    UnsupportedFormatError
+    UnsupportedFormatError, find_executable
 )
 
 
@@ -28,12 +28,19 @@ logger = get_child_logger('rtl_native')
 
 
 class RequestFileHandle(object):
+    """Wrapper class to give 'web.RequestHandler' a 'file-like' interface.
+
+    This fakes a seekable stream to avoid exceptions when using this with
+    python's "wave" and "aifc" modules.
+    """
 
     def __init__(self, handler):
+        """Constructor that accepts the RequestHandler to write to."""
         self._handler = handler
         self._count = 0
 
     def write(self, data):
+        """Write the given data to the handler."""
         self._handler.write(data)
         self._count += len(data)
 
@@ -41,10 +48,15 @@ class RequestFileHandle(object):
         pass
 
     def tell(self):
+        """Return current bytes written.
+
+        The number of bytes written is also the current position in the
+        stream, since we do not permit seeking.
+        """
         return self._count
 
     def seek(self, *args):
-        # Do nothing.
+        """No-op, since this stream is not seekable."""
         pass
 
     def flush(self):
@@ -61,12 +73,24 @@ class RtlFMNativeDriver(AbstractRtlDriver):
     will be encoded upon request into WAV, AIFF, or other formats.
     """
 
+    name = 'native'
+
+    @classmethod
+    def from_config(cls, config):
+        rtlfm = config.get('rtl_fm')
+        if not rtlfm:
+            rtlfm = find_executable('rtl_fm')
+            if not rtlfm:
+                raise Exception("Could not find path to: rtl_fm")
+            config['rtl_fm'] = rtlfm
+        return cls(config)
+
     def __init__(self, config):
         supported_formats = ['aiff', 'aifc', 'wav']
         super(RtlFMNativeDriver, self).__init__(supported_formats)
 
         # TODO -- Probably should not assume this path, but it works for now.
-        self._rtlfm_exec_path = config.get('rtl_fm', '/usr/local/bin/rtl_fm')
+        self._rtlfm_exec_path = config['rtl_fm']
 
         kb_buffer_size = int(config.get('kb_buffer_size', 128))
         self._pcm_buffer = deque(maxlen=kb_buffer_size)

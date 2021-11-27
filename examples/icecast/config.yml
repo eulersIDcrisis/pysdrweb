@@ -1,0 +1,11 @@
+#
+# Sample 'icecast' driver configuration file.
+#
+---
+
+driver: icecast
+icecast:
+  rtl_fm: /usr/local/bin/rtl_fm
+  sox: /usr/local/bin/sox
+  ffmpeg: /usr/local/bin/ffmpeg
+  icecast_url: http://source:hackme@localhost:8080/radio
