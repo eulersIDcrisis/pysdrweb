@@ -76,7 +76,8 @@ def list_drivers():
 @click.argument('config_file', type=click.Path(
     exists=True, file_okay=True, readable=True))
 @click.option('-p', '--port', type=click.IntRange(1, 65535), help=(
-    "Port to run the server. Overrides any option set in the config file."))
+    "Port to run the server. Overrides any option set in the config file."),
+    default=8000)
 @click.option('-v', '--verbose', count=True, default=0, help=(
     "Enable verbose output. This option stacks for increasing verbosity."))
 def main_run(config_file, port, verbose):
