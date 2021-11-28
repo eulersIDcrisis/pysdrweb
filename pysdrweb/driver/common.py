@@ -95,7 +95,7 @@ class AbstractRtlDriver(object):
     def stop(self):
         for proc in self._processes:
             if proc.returncode is None:
-                proc.terminate()
+                proc.kill()
 
     async def wait(self):
         if self._futures:
