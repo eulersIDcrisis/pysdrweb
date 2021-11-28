@@ -139,7 +139,7 @@ class IcecastRtlFMDriver(AbstractRtlDriver):
 
         self._frequency = frequency
 
-    async def process_request(self, req_handler, fmt):
+    async def process_request(self, req_handler, fmt, timeout):
         # Proxy this request to the icecast server. This currently only
         # supports GET, since that is all that should be necessary.
         #

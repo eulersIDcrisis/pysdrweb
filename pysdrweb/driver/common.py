@@ -127,7 +127,7 @@ class AbstractRtlDriver(object):
         # Start the process up again.
         await self.start(self._frequency)
 
-    async def process_request(self, req_handler, fmt):
+    async def process_request(self, req_handler, fmt, timeout):
         raise NotImplementedError()
 
 

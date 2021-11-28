@@ -192,16 +192,7 @@ class RtlFMNativeDriver(AbstractRtlDriver):
             self._wait_to_join_queues()
         ))
 
-    async def process_request(self, req_handler, fmt):
-        # Extract any timeout parameter.
-        try:
-            timeout = req_handler.get_argument('timeout', None)
-            if timeout is not None:
-                timeout = float(timeout)
-        except Exception:
-            req_handler.set_status(400)
-            req_handler.finish()
-            return
+    async def process_request(self, req_handler, fmt, timeout):
         # Check for other formats first, because 'WAV' and 'AIFF' are handled
         # almost identically.
         writer = None
@@ -242,7 +233,7 @@ class RtlFMNativeDriver(AbstractRtlDriver):
                 writer.setframerate(48000)
                 writer.setnframes(48000000)
                 writer.setcomptype(b'G722', b'G.722 Compression.')
-                req_handler.set_header('Content-Type', 'audio/aifc')
+                req_handler.set_header('Content-Type', 'audio/aiff')
             else:
                 raise UnsupportedFormatError(
                     'Format ({}) not supported by this driver!'.format(fmt))
@@ -267,66 +258,3 @@ class RtlFMNativeDriver(AbstractRtlDriver):
         finally:
             if writer:
                 writer.close()
-
-    # async def _write_wav_format(self, req_handler):
-    #     writer = None
-    #     try:
-    #         file_handle = RequestFileHandle(req_handler)
-    #         writer = wave.open(file_handle, 'wb')
-
-    #         # Set the content type for this handler.
-    #         req_handler.set_header('Content-Type', 'audio/wav')
-    #         # Set the common parameters for the writer here.
-    #         #
-    #         # 1 channel (Mono)
-    #         # 2 byte width sample
-    #         # 48k framerate
-    #         # 48000000 is an arbitrarily large number of frames.
-    #         # 'NONE' compression type.
-    #         # None for the compression name.
-    #         writer.setparams((1, 2, 48000, 0, 'NONE', None))
-
-    #         async for pcm_data in self.data_generator():
-    #             writer.writeframesraw(pcm_data)
-    #             await req_handler.flush()
-    #     except iostream.StreamClosedError:
-    #         # Done because the connection is closed, so just exit.
-    #         return
-    #     finally:
-    #         if writer:
-    #             writer.close()
-
-    # async def _write_aiff_format(self, req_handler):
-    #     writer = None
-    #     try:
-    #         file_handle = RequestFileHandle(req_handler)
-    #         writer = aifc.open(file_handle, 'wb')
-
-    #         # Set the content type for this handler.
-    #         req_handler.set_header('Content-Type', 'audio/wav')
-    #         # Set the common parameters for the writer here.
-    #         #
-    #         # 1 channel (Mono)
-    #         # 2 byte width sample
-    #         # 48k framerate
-    #         # 48000000 is an arbitrarily large number of frames.
-    #         # 'NONE' compression type.
-    #         # None for the compression name.
-    #         writer.setparams((1, 2, 48000, 0, 'NONE', None))
-
-    #         async for pcm_data in self.data_generator():
-    #             writer.writeframesraw(pcm_data)
-    #             await req_handler.flush()
-    #     except iostream.StreamClosedError:
-    #         # Done because the connection is closed, so just exit.
-    #         return
-    #     except Exception:
-    #         logger.exception('Unexpected error when writing to AIF%s format!',
-    #                          'C' if compressed else 'F')
-    #         # Do nothing, because we cannot signal the error after a 200
-    #         # status code. The error is (potentially) benign anyway, but not
-    #         # always, so log it.
-    #         return
-    #     finally:
-    #         if writer:
-    #             writer.close()

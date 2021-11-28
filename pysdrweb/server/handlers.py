@@ -76,8 +76,17 @@ class ProcessAudioHandler(BaseRequestHandler):
         if ext.startswith('.'):
             ext = ext[1:]
         driver = self.get_driver()
+
         try:
-            await driver.process_request(self, ext)
+            timeout = req_handler.get_argument('timeout', None)
+            if timeout is not None:
+                timeout = float(timeout)
+        except Exception:
+            req_handler.send_status(400, "Bad 'timeout' parameter!")
+            return
+
+        try:
+            await driver.process_request(self, ext, timeout)
         except UnsupportedFormatError as exc:
             self.send_status(400, str(exc))
         except Exception:
