@@ -75,9 +75,9 @@ def list_drivers():
     "Run the SDR Web server, using the config file and options. "))
 @click.argument('config_file', type=click.Path(
     exists=True, file_okay=True, readable=True))
-@click.option('-p', '--port', type=click.IntRange(1, 65535), help=(
+@click.option('-p', '--port', type=click.IntRange(0, 65535), help=(
     "Port to run the server. Overrides any option set in the config file."),
-    default=8000)
+    default=0)
 @click.option('-v', '--verbose', count=True, default=0, help=(
     "Enable verbose output. This option stacks for increasing verbosity."))
 def main_run(config_file, port, verbose):
@@ -95,11 +95,11 @@ def main_run(config_file, port, verbose):
         sys.exit(1)
 
     # Parse the port.
-    server_port = option_dict.get('port')
-    if port:
+    server_port = int(option_dict.get('port', 0))
+    if port > 0:
         server_port = port
     # Assert the port is valid.
-    if not port:
+    if not server_port:
         raise click.BadParameter("Invalid port parameter!")
 
     # Setup logging.

@@ -2,7 +2,7 @@
 # Sample 'native' driver configuration file.
 # 
 ---
-
+port: 9000
 # Driver settings.
 driver: native
 native:
