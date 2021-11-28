@@ -13,9 +13,9 @@ setup(
     install_requires=[
         # Require 'tornado', minimum version of 6.0.1
         # Could possibly waive this to tornado 5.X, not sure.
-        'tornado>=6.1',
+        'tornado>=6.0.1',
         'PyYAML>=5.4.1',
-        'click>=7.0.0'
+        'click>=5.0.0'
     ],
     setup_requires=['flake8'],
     entry_points={
