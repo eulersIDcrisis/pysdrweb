@@ -5,6 +5,7 @@ Native encoding driver for rtl_fm.
 This uses built-in python utilities to encode the raw PCM
 output from 'rtl_fm' into different formats.
 """
+import math
 import asyncio
 import subprocess
 from collections import deque
@@ -12,6 +13,15 @@ from collections import deque
 # Stdlib Soundfile Imports
 import wave
 import aifc
+
+# Try the soundfile import. If it fails, set a flag, but don't fail;
+# the native driver will then only support WAV, AIFF, and similar.
+try:
+    import soundfile
+    _SOUNDFILE_IMPORTED = True
+except ImportError:
+    # Import failed, so set it false.
+    _SOUNDFILE_IMPORTED = False
 
 # Tornado imports.
 from tornado import iostream
@@ -22,6 +32,10 @@ from pysdrweb.driver.common import (
     AbstractRtlDriver, read_lines_from_stream,
     UnsupportedFormatError, find_executable
 )
+
+
+_NATIVE_FORMATS = set(['AIFF', 'AIFC', 'WAV'])
+"""Native formats supported via a raw python interface."""
 
 
 logger = get_child_logger('rtl_native')
@@ -86,11 +100,27 @@ class RtlFMNativeDriver(AbstractRtlDriver):
         return cls(config)
 
     def __init__(self, config):
-        supported_formats = ['aiff', 'aifc', 'wav']
+        supported_formats = list(_NATIVE_FORMATS)
+        if _SOUNDFILE_IMPORTED:
+            format_mapping = soundfile.available_formats()
+
+            # For now, let's only support 'OGG' and 'FLAC'. We could
+            # possibly open this up to all of them, but this is okay for
+            # now.
+            if 'OGG' in format_mapping:
+                supported_formats.append('OGG')
+            if 'FLAC' in format_mapping:
+                supported_formats.append('FLAC')
         super(RtlFMNativeDriver, self).__init__(supported_formats)
 
         # TODO -- Probably should not assume this path, but it works for now.
         self._rtlfm_exec_path = config['rtl_fm']
+
+        # Common encoding parameters.
+        self._framerate = 48000
+        # Data from RTL-FM is PCM: Mono, 2-byte, unsigned little endian.
+        self._nchannels = 1
+        self._sample_width = 2
 
         kb_buffer_size = int(config.get('kb_buffer_size', 128))
         self._pcm_buffer = deque(maxlen=kb_buffer_size)
@@ -166,8 +196,9 @@ class RtlFMNativeDriver(AbstractRtlDriver):
     async def start(self, frequency):
         self._stop_requested.clear()
         rtl_cmd = [
-            self._rtlfm_exec_path, '-f', frequency, '-s',
-            '200k', '-r', '48k', '-A', 'fast', '-'
+            self._rtlfm_exec_path, '-f', '{}'.format(frequency),
+            '-s', '200k', '-r', '{}'.format(self._framerate),
+            '-A', 'fast', '-'
         ]
         rtl_proc = await asyncio.create_subprocess_exec(
             *rtl_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -193,63 +224,143 @@ class RtlFMNativeDriver(AbstractRtlDriver):
         ))
 
     async def process_request(self, req_handler, fmt, timeout):
-        # Check for other formats first, because 'WAV' and 'AIFF' are handled
-        # almost identically.
+        try:
+            fmt = fmt.upper()
+            if fmt not in self.supported_formats:
+                raise UnsupportedFormatError(
+                    'Unsupported format: {}'.format(fmt))
+            if fmt.upper() in _NATIVE_FORMATS:
+                # Use the native python imports.
+                await self._process_using_native_library(
+                    req_handler, fmt, timeout)
+            else:
+                await self._process_using_soundfile(
+                    req_handler, fmt, timeout)
+        except UnsupportedFormatError as ufe:
+            req_handler.send_status(400, "Unsupported format: {}".format(fmt))
+        except Exception:
+            logger.exception("Error in rtl_native request!")
+            req_handler.send_status(500, "Internal Server Error.")
+
+    async def _process_using_native_library(self, req_handler, fmt, timeout):
+        # The 'timeout' parameter is the number of seconds. If negative
+        # (or None), this implies indefinite. Since we cannot _actually_
+        # do that, we set the number of frames to some arbitrarily large
+        # number.
+        if timeout is not None and timeout > 0:
+            frame_count = int(math.ceil(48000 * timeout))
+        else:
+            # Some arbitrarily large number, mapping to 1000 minutes.
+            frame_count = 48000000
+
         writer = None
         try:
+            # The common parameters for the writer here.
+            #
+            # 1 channel (Mono)
+            # 2 byte width sample
+            # 48k framerate
+            # 48000000 is an arbitrarily large number of frames.
+            # 'NONE' compression type.
+            # None for the compression name.
             file_handle = RequestFileHandle(req_handler)
-            if fmt == 'wav':
+            if fmt == 'WAV':
                 writer = wave.open(file_handle, 'wb')
-                # Set the common parameters for the writer here.
-                #
-                # 1 channel (Mono)
-                # 2 byte width sample
-                # 48k framerate
-                # 48000000 is an arbitrarily large number of frames.
-                # 'NONE' compression type.
-                # None for the compression name.
-                writer.setparams((1, 2, 48000, 480000000, 'NONE', None))
+                writer.setnchannels(self._nchannels)
+                writer.setsampwidth(self._sample_width)
+                writer.setframerate(self._framerate)
+                writer.setnframes(frame_count)
+                writer.setcomptype('NONE', 'No compression.')
                 req_handler.set_header('Content-Type', 'audio/wav')
-            elif fmt == 'aiff':
+            elif fmt == 'AIFF':
                 writer = aifc.open(file_handle, 'wb')
                 # Set the common parameters for the writer here.
                 #
                 # 1 channel (Mono)
                 # 2 byte width sample
                 # 48k framerate
-                # 48000000 is an arbitrarily large number of frames.
                 # 'NONE' compression type.
                 # None for the compression name.
-                writer.setnchannels(1)
-                writer.setsampwidth(2)
-                writer.setframerate(48000)
-                writer.setnframes(48000000)
+                writer.setnchannels(self._nchannels)
+                writer.setsampwidth(self._sample_width)
+                writer.setframerate(self._framerate)
+                writer.setnframes(frame_count)
                 writer.setcomptype(b'NONE', b'No compression.')
                 req_handler.set_header('Content-Type', 'audio/aiff')
-            elif fmt == 'aifc':
+            elif fmt == 'AIFC':
                 writer = aifc.open(file_handle, 'wb')
-                writer.setnchannels(1)
-                writer.setsampwidth(2)
-                writer.setframerate(48000)
-                writer.setnframes(48000000)
+                writer.setnchannels(self._nchannels)
+                writer.setsampwidth(self._sample_width)
+                writer.setframerate(self._framerate)
+                writer.setnframes(frame_count)
                 writer.setcomptype(b'G722', b'G.722 Compression.')
                 req_handler.set_header('Content-Type', 'audio/aiff')
             else:
-                raise UnsupportedFormatError(
-                    'Format ({}) not supported by this driver!'.format(fmt))
-        except UnsupportedFormatError:
-            raise
+                raise Exception("Internal error in fmt logic!")
         except Exception:
             logger.exception("Unknown error initializing format: %s", fmt)
             req_handler.send_status(500, "Internal Server Error.")
-            req_handler.finish()
             return
 
         try:
+            frame_num = 0
             async for pcm_data in self.data_generator():
                 # Writing data:
                 writer.writeframesraw(pcm_data)
                 await req_handler.flush()
+                frame_num += (len(pcm_data) / (
+                    self._sample_width * self._nchannels))
+                # Stop writing frames if we've exceeded the frame count.
+                if frame_num >= frame_count:
+                    return
+        except iostream.StreamClosedError:
+            return
+        except Exception:
+            logger.exception(
+                "Unexpected error while sending data w/format: %s", fmt)
+        finally:
+            if writer:
+                writer.close()
+
+    async def _process_using_soundfile(self, req_handler, fmt, timeout):
+        """Process the request using 'soundfile'.
+
+        This handles requests using python's "soundfile" import and the
+        applicable 'libsndfile' dynamic library, if it is available. This
+        supports more formats than just WAV, AIFF, and AU.
+        """
+        try:
+            file_handle = RequestFileHandle(req_handler)
+            writer = soundfile.SoundFile(
+                file_handle, mode='w', format=fmt.upper(),
+                samplerate=self._framerate, channels=self._nchannels)
+        except Exception:
+            raise UnsupportedFormatError('Unsupported format: {}'.format(fmt))
+
+        if timeout is not None and timeout > 0:
+            frame_count = int(math.ceil(48000 * timeout))
+        else:
+            frame_count = None
+
+        # Write out the frame data.
+        try:
+            frame_num = 0
+            async for pcm_data in self.data_generator():
+                writer.buffer_write(pcm_data, dtype='int16')
+                await req_handler.flush()
+
+                # Count the number of frames, like with the native driver.
+                # The contents here are likely
+                frame_num += (len(pcm_data) / (
+                    self._sample_width * self._nchannels))
+                # Stop writing frames if we've exceeded the frame count.
+                if frame_count is not None and frame_num >= frame_count:
+                    # Explicitly close the writer, then set it None. This
+                    # tells the soundfile to flush any remaining contents
+                    # to the stream before we exit the request.
+                    writer.close()
+                    writer = None
+                    return
         except iostream.StreamClosedError:
             return
         except Exception:

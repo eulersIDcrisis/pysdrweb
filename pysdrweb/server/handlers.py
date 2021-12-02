@@ -68,30 +68,51 @@ class ContextInfoHandler(BaseRequestHandler):
             self.write(dict(status=500, message="Internal Server Error"))
 
 
+async def _stream_audio(req_handler, driver, timeout, fmt):
+    """Helper that streams  the audio."""
+    try:
+        # Disable the cache for these requests.
+        req_handler.set_header('Cache-Control', 'no-cache')
+        await driver.process_request(req_handler, fmt, timeout)
+    except UnsupportedFormatError as exc:
+        req_handler.send_status(400, str(exc))
+    except Exception:
+        logger.exception(
+            "Error streaming audio! Driver: %s Format: %s", driver.name, fmt)
+        req_handler.send_status(500, "Internal Server Error.")
+
+
 class ProcessAudioHandler(BaseRequestHandler):
+    """Handler that streams the audio in the requested format.
+
+    This handler defers all of its calls to the local driver. The format
+    requested is implicit in the extension. This supports the following
+    query parameters:
+     - timeout: How long (in seconds) to listen to the stream and encode
+            the stream before finalizing the stream. If this is omitted
+            (or is negative), then this continues indefinitely until the
+            connection is broken.
+     - download: If passed, this sets the 'Content-Disposition' header
+            so that the file can be treated as a download by the browser.
+    """
 
     async def get(self, ext):
         if not ext:
-            ext = 'mp3'
+            ext = 'MP3'
         if ext.startswith('.'):
             ext = ext[1:]
         driver = self.get_driver()
 
+        # Parse the timeout query parameter.
         try:
-            timeout = req_handler.get_argument('timeout', None)
+            timeout = self.get_argument('timeout', None)
             if timeout is not None:
                 timeout = float(timeout)
-        except Exception:
-            req_handler.send_status(400, "Bad 'timeout' parameter!")
-            return
 
-        try:
-            await driver.process_request(self, ext, timeout)
-        except UnsupportedFormatError as exc:
-            self.send_status(400, str(exc))
+            # The helper takes control of the request once called.
+            await _stream_audio(self, driver, timeout, ext)
         except Exception:
-            logger.exception("Error in process audio handler!")
-            self.send_status(500, "Internal Server Error.")
+            self.send_status(400, "Bad 'timeout' parameter!")
 
 
 def get_api_routes():
@@ -100,7 +121,7 @@ def get_api_routes():
     NOTE: All of the routes here are prefixed with: '/api'
     """
     return [
-        (r'/api/radio(\.[a-zA-Z0-9]+)?', ProcessAudioHandler),
+        (r'/api/radio/audio(\.[a-zA-Z0-9]+)?', ProcessAudioHandler),
         (r'/api/frequency', FrequencyHandler),
         (r'/api/procinfo', ContextInfoHandler),
     ]
