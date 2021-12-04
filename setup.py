@@ -15,7 +15,8 @@ setup(
         # Could possibly waive this to tornado 5.X, not sure.
         'tornado>=6.0.1',
         'PyYAML>=5.4.1',
-        'click>=5.0.0'
+        'click>=5.0.0',
+        'SoundFile>=0.10.0',
     ],
     setup_requires=['flake8'],
     entry_points={

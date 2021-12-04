@@ -43,7 +43,9 @@ async def close_pipe_on_exit(proc, fd):
 class AbstractRtlDriver(object):
 
     def __init__(self, formats):
-        self._supported_formats = frozenset(formats)
+        self._supported_formats = frozenset([
+            format.upper() for format in formats
+        ])
         self._processes = []
         self._futures = []
         self._shutdown_hooks = []
@@ -127,7 +129,7 @@ class AbstractRtlDriver(object):
         # Start the process up again.
         await self.start(self._frequency)
 
-    async def process_request(self, req_handler, fmt):
+    async def process_request(self, req_handler, fmt, timeout):
         raise NotImplementedError()
 
 
