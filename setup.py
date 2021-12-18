@@ -3,10 +3,26 @@
 Installing pysdrweb.
 """
 from setuptools import setup, find_packages
+import os
 
+def get_version():
+    version = {}
+    path = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), 'pysdrweb', '__about__.py'
+    ))
+    with open(path, 'r') as stm:
+        code = stm.read()
+    exec(code, version)
+    return version.get('__version__', '(unknown)')
+
+
+VERSION = get_version()
+
+
+# NOTE: The 'version' is set via setup.cfg.
 setup(
     name='pysdrweb',
-    version='0.1.0',
+    version=VERSION,
     description='FM Web Radio using RTL-SDR utilities.',
     author='eulersIDcrisis',
     packages=find_packages(include=['pysdrweb', 'pysdrweb.*']),
@@ -21,7 +37,7 @@ setup(
     setup_requires=['flake8'],
     entry_points={
         'console_scripts': [
-            'sdrwebserver=pysdrweb.server.main:main_cli'
+            'pysdr_fmserver=pysdrweb.server.main:main_cli'
         ]
     }
 )
