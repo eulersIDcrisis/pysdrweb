@@ -3,6 +3,19 @@
 # 
 ---
 port: 9000
+# Auth settings
+#
+# Valid auth types: 'basic' and 'none' (omitting the 'auth' field is the same
+# as an 'auth' field of 'none'.
+#
+# Uncomment to require auth to change the frequency.
+# auth:
+#   type: basic
+#   user: admin
+#   password: s3cr3t
+
+# Starting (FM) channel/frequency to listen on startup.
+default_frequency: 107.3M
 # Driver settings.
 driver: native
 native:

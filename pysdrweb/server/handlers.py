@@ -7,16 +7,25 @@ These routes do _not_ handle the static files or other portions of the server,
 however; this should be handled elsewhere.
 """
 import os
+import base64
 import asyncio
+from functools import wraps
 from tornado import ioloop, httpserver, netutil, web
 from pysdrweb.util.logger import logger
 from pysdrweb.driver.common import UnsupportedFormatError
 
 
+class NotAuthorized(Exception):
+    """Exception denoting the caller is not authorized."""
+
+
 class BaseRequestHandler(web.RequestHandler):
 
     def get_driver(self):
-        return self.application.settings['driver']
+        return self.get_context().driver
+
+    def get_context(self):
+        return self.application.settings['context']
 
     def send_status(self, code, message):
         self.set_status(code)
@@ -24,6 +33,24 @@ class BaseRequestHandler(web.RequestHandler):
 
 
 class FrequencyHandler(BaseRequestHandler):
+
+    def _process_auth_header(self):
+        context = self.get_context()
+        # Check for the authentication header.
+        header = self.request.headers.get('Authorization', None)
+        if context.admin_user and context.admin_password:
+            if not header:
+                raise NotAuthorized()
+            try:
+                # Decode the header as a string.
+                decoded = base64.b64decode(header).decode('utf-8')
+                user, password = decoded.split(':', 1)
+                if (user != context.admin_user and
+                        password != context.admin_password):
+                    raise Exception('Password did not match!')
+            except Exception as exc:
+                logger.error('Error decoding token: %s', exc)
+                raise NotAuthorized()
 
     async def get(self):
         try:
@@ -37,6 +64,12 @@ class FrequencyHandler(BaseRequestHandler):
             self.send_status(500, 'Internal Server Error')
 
     async def post(self):
+        try:
+            self._process_auth_header()
+        except Exception:
+            self.set_header('WWW-Authenticate', 'Basic realm="PySDRWeb"')
+            self.send_status(401, 'Authentication required!')
+            return
         try:
             new_freq = self.get_argument('frequency')
         except Exception:
@@ -127,11 +160,26 @@ def get_api_routes():
     ]
 
 
+class Context(object):
+
+    def __init__(self, driver, auth_dict):
+        self.driver = driver
+        self.auth_dict = auth_dict if auth_dict else {}
+
+    @property
+    def admin_user(self):
+        return self.auth_dict.get('user', 'admin')
+
+    @property
+    def admin_password(self):
+        return self.auth_dict.get('password')
+
+
 class Server(object):
 
-    def __init__(self, driver, port=None):
+    def __init__(self, driver, auth_dict=None, port=None):
         # self.config = config
-        self._driver = driver
+        self._context = Context(driver, auth_dict)
         self._port = port or 8000
 
         self._shutdown_hooks = []
@@ -169,11 +217,11 @@ class Server(object):
         # Start the driver.
         frequency = '107.3M'
         logger.info('Starting on frequency: %s', frequency)
-        await self._driver.start(frequency)
+        await self._context.driver.start(frequency)
         # Register the driver to stop.
         async def _stop_driver():
-            self._driver.stop()
-            await self._driver.wait()
+            self._context.driver.stop()
+            await self._context.driver.wait()
         self._drain_hooks.append(_stop_driver)
 
         # Now that the process is started, setup the server.
@@ -183,7 +231,7 @@ class Server(object):
             (r'/static/(.*)', web.StaticFileHandler, dict(
                 path=get_static_file_location()))
         ])
-        app = web.Application(routes, driver=self._driver)
+        app = web.Application(routes, context=self._context)
 
         logger.info('Running server on port: %d', self._port)
         sockets = netutil.bind_sockets(self._port)
