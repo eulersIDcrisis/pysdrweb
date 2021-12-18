@@ -10,7 +10,7 @@ import yaml
 import click
 # Local imports.
 from pysdrweb.util.logger import logger
-from pysdrweb.server.handlers import Server
+from pysdrweb.server.handlers import Context, Server
 from pysdrweb.driver.loader import get_driver_mapping
 
 
@@ -106,7 +106,9 @@ def main_run(config_file, port, verbose):
     logging.basicConfig(level=level)
 
     # Now, start the server as would be expected.
-    server = Server(driver, port=server_port)
+    auth_dict = option_dict.get('auth', {})
+    context = Context(driver, auth_dict)
+    server = Server(context, port=server_port)
 
     # Setup the signal handler.
     def _sighandler(signum, stack_frame):
