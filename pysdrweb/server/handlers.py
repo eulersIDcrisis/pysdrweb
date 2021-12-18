@@ -31,9 +31,6 @@ class BaseRequestHandler(web.RequestHandler):
         self.set_status(code)
         self.write(dict(status=code, message=message))
 
-
-class FrequencyHandler(BaseRequestHandler):
-
     def _process_auth_header(self):
         context = self.get_context()
         # Check for the authentication header.
@@ -41,9 +38,15 @@ class FrequencyHandler(BaseRequestHandler):
         if context.admin_user and context.admin_password:
             if not header:
                 raise NotAuthorized()
+            HEADER_PREFIX = 'Basic '
+            if not header.startswith(HEADER_PREFIX):
+                raise NotAuthorized()
             try:
                 # Decode the header as a string.
-                decoded = base64.b64decode(header).decode('utf-8')
+                decoded = base64.b64decode(
+                    # Drop the 'Basic ' portion of the header.
+                    header[len(HEADER_PREFIX):]
+                ).decode('utf-8')
                 user, password = decoded.split(':', 1)
                 if (user != context.admin_user and
                         password != context.admin_password):
@@ -51,6 +54,9 @@ class FrequencyHandler(BaseRequestHandler):
             except Exception as exc:
                 logger.error('Error decoding token: %s', exc)
                 raise NotAuthorized()
+
+
+class FrequencyHandler(BaseRequestHandler):
 
     async def get(self):
         try:
@@ -177,9 +183,9 @@ class Context(object):
 
 class Server(object):
 
-    def __init__(self, driver, auth_dict=None, port=None):
+    def __init__(self, context, port=None):
         # self.config = config
-        self._context = Context(driver, auth_dict)
+        self._context = context
         self._port = port or 8000
 
         self._shutdown_hooks = []
