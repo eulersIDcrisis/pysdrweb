@@ -35,7 +35,7 @@ class BaseRequestHandler(web.RequestHandler):
         context = self.get_context()
         # Check for the authentication header.
         header = self.request.headers.get('Authorization', None)
-        if context.admin_user and context.admin_password:
+        if context.auth_type == 'basic':
             if not header:
                 raise NotAuthorized()
             HEADER_PREFIX = 'Basic '
@@ -48,7 +48,7 @@ class BaseRequestHandler(web.RequestHandler):
                     header[len(HEADER_PREFIX):]
                 ).decode('utf-8')
                 user, password = decoded.split(':', 1)
-                if (user != context.admin_user and
+                if (user != context.admin_user or
                         password != context.admin_password):
                     raise Exception('Password did not match!')
             except Exception as exc:
@@ -170,7 +170,14 @@ class Context(object):
 
     def __init__(self, driver, auth_dict):
         self.driver = driver
-        self.auth_dict = auth_dict if auth_dict else {}
+        if auth_dict:
+            auth_type = auth_dict.get('type', 'none').lower()
+            if auth_type not in set(['basic', 'none', 'null']):
+                raise ValueError(
+                    'Unsupported auth type: {}'.format(auth_type))
+            self.auth_dict = auth_dict
+        else:
+            self.auth_dict = {}
 
     @property
     def admin_user(self):
