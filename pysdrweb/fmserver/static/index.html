@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>RTL-SDR FM Radio</title>
+</head>
+<body>
+  <h1>RTL-SDR FM Radio</h1>
+  <p>
+    Basic FM server that works as an FM Radio. It permits tuning
+    the station, and playing it back via the web browser.
+  </p>
+  <audio controls>
+    <source src="/api/radio/audio.flac" type="audio/flac">
+    <source src="/api/radio/audio.ogg" type="audio/ogg">
+    <source src="/api/radio/audio.mp3" type="audio/mpeg">
+    <source src="/api/radio/audio.aifc" type="audio/aiff">
+    <source src="/api/radio/audio.wav" type="audio/wav">
+    Your browser does not support the audio tag.
+  </audio>
+  <div>
+    <h2>Tuner</h2>
+    <div>Current frequency: <span id="tuner-element"></span></div>
+    <form method="POST" action="/api/frequency">
+      <label for="change-freq">New Frequency:</label>
+      <input type="text" id="change-freq" name="frequency">
+      <input type="submit" value="Change Frequency">
+    </form>
+    <script type="text/javascript">
+      async function updateTuner() {
+        let data = {};
+        try {
+          res = await fetch('/api/frequency', {
+            method: 'GET'
+          });
+          data = await res.json()
+        } catch (e) {
+          console.error(e);
+          return;
+        }
+        const elem = document.getElementById('tuner-element')
+        elem.innerHTML = data.frequency;
+      }
+      updateTuner();
+    </script>
+  </div>
+  <div>
+    <h2>Log</h2>
+    <button id="log-refresh" onclick="updateLog();">Refresh</button>
+    <div id="log-element" style="white-space: pre-wrap;"></div>
+    <script type="text/javascript">
+      async function updateLog() {
+        let data = {};
+        try {
+          res = await fetch('/api/procinfo', {
+            method: 'GET'
+          });
+          data = await res.text()
+        } catch (e) {
+          console.error(e);
+          return;
+        }
+        const elem = document.getElementById('log-element')
+        elem.innerHTML = data.replace('\n', '<br />');
+      }
+      updateLog();
+    </script>
+  </div>
+</body>
+</html>
