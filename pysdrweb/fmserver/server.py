@@ -3,56 +3,120 @@
 Server utilities for the FM server mode for the RTL-SDR dongle.
 """
 import os
+import logging
+import click
+from pysdrweb.util.misc import get_version
+from pysdrweb.util.ioloop import IOLoopContext
+from pysdrweb.util.logger import get_child_logger
+from pysdrweb.fmserver.driver import RtlFmExecDriver
+from pysdrweb.fmserver.handlers import FmServerContext
 
 
-def get_static_file_location():
-    """Return the static files for the FM Server."""
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    file_path = os.path.join(dir_path, '..', 'static')
-    return os.path.realpath(file_path)
+logger = get_child_logger('fmserver')
 
 
-class FMServerContext(object):
-    """Context for the FM Server part of this RTL-SDR server."""
+def parse_option_dict(option_dict):
+    """Parse the given dictionary and create the driver.
 
-    def __init__(self, driver, auth_dict):
-        self._driver = driver
-        self._start_frequency = '107.3M'
-        if auth_dict:
-            auth_type = auth_dict.get('type', 'none').lower()
-            if auth_type not in set(['basic', 'none', 'null']):
-                raise ValueError(
-                    'Unsupported auth type: {}'.format(auth_type))
-            self.auth_dict = auth_dict
-        else:
-            self.auth_dict = {}
+    Returns
+    -------
+    tuple of (<dict of options>, Driver)
+    """
+    # Check for the 'driver' option. This MUST be set to one of
+    # the available drivers in the system.
+    driver_name = option_dict.get('driver')
+    if not driver_name:
+        raise Exception("No driver configured!")
 
-    @property
-    def driver(self):
-        """Get the primary driver for this context."""
-        return self._driver
+    # Fetch the available drivers and find a match.
+    driver_mapping = get_driver_mapping()
+    driver_type = driver_mapping.get(driver_name)
+    if not driver_type:
+        raise Exception(
+            "Driver (type: {}) is not supported!".format(driver_name)
+        )
+    # Be nice and assume an empty dictionary if there are no options
+    # configured for the current driver.
+    driver_options = option_dict.get(driver_name, dict())
+    driver = driver_type(driver_options)
+    return option_dict, driver
 
-    @property
-    def admin_user(self):
-        return self.auth_dict.get('user', 'admin')
 
-    @property
-    def admin_password(self):
-        return self.auth_dict.get('password')
+# Create the base command for use with this server.
+@click.command()
+@click.option('-c', '--config', help=(
+    "Config file to read options from. Any CLI options here will override "
+    "options in this config file. It is recommended to use the config file "
+    "for most options, since not everything can be configured through the "
+    "CLI."
+), type=click.Path(readable=True, exists=True, dir_okay=False))
+@click.option('-v', '--verbose', flag_value=True, help=(
+    "Enable verbose of the output."))
+@click.option('-p', '--port', type=click.IntRange(0, 65535), help=(
+    "Port to run the server on. Calling multiple times will listen on each "
+    "port. If no port is specified either here or in the config file, this "
+    "will default to port 9000 for convenience."), default=[0], multiple=True)
+@click.option('-f', '--frequency', type=click.STRING, help=(
+    "FM frequency to use when starting the server. Overrides any default set "
+    "via configuration file."))
+@click.option(
+    '-m', '--rtl', help="Path to the 'rtl_fm' executable.",
+    type=click.Path(readable=True, exists=True))
+@click.option('--unix', type=click.Path(readable=True, writable=True), help=(
+    "UNIX socket to listen to the server on."))
+@click.help_option('-h', '--help')
+@click.version_option(get_version())
+def fm_server_command(port, frequency, rtl, unix, verbose, config):
+    """CLI to run the FM server via RTL-FM."""
+    level = logging.DEBUG if verbose > 0 else logging.INFO
+    logging.basicConfig(level=level)
 
-    def get_routes(self):
-        routes = get_api_routes()
-        routes.extend([
-            (r'/', web.RedirectHandler, dict(url='/static/index.html')),
-            (r'/static/(.*)', web.StaticFileHandler, dict(
-                path=get_static_file_location()))
-        ])
-        return routes
+    # Parse the configuration file first.
+    if config:
+        with open(config, 'r') as stm:
+            option_dict = yaml.safe_load(stm)
+    else:
+        option_dict = dict()
 
-    async def start(self):
-        # Start the driver.
-        logger.info('Starting on frequency: %s', frequency)
-        await self.driver.start(frequency)
+    # Port settings.
+    if port and port[0]:
+        option_dict['port'] = port
+    elif 'port' not in option_dict:
+        # The default port is 9000
+        option_dict['port'] = [9000]
+    # UNIX domain socket.
+    if unix:
+        curr_ports = option_dict.get('port', [])
+        if isinstance(curr_ports, int):
+            option_dict['port'] = [curr_ports]
+        option_dict['port'].append('unix:{}'.format(unix))
+    # Final, parsed ports
+    ports = option_dict['port']
+
+    # Custom rtl_fm exec path.
+    if rtl:
+        driver_dict = option_dict.get('driver', {})
+        if driver_dict:
+            option_dict['driver']['rtl_fm'] = rtl
+    if frequency:
+        option_dict['default_frequency'] = frequency
+
+    print("OPTIONS: ", option_dict)
+    # Create the driver.
+    driver = RtlFmExecDriver.from_config(option_dict.get('driver', {}))
+    context = FmServerContext(driver, {})
+
+    app = context.generate_app()
+    server = IOLoopContext()
+    server.create_http_server(app, ports)
+    port_msg = ', '.join(['{}'.format(port) for port in ports])
+    logger.info("Running server on ports: %s", port_msg)
+    server.run()
+
+    print("PORT: ", port)
+    print("rtl: ", rtl)
+    print("config: ", config)
+    print("unix: ", unix)
 
 
 class Server(object):
@@ -136,3 +200,7 @@ class Server(object):
                 logger.exception('Error running drain hook!')
         # Stop the current loop.
         ioloop.IOLoop.current().stop()
+
+
+if __name__ == '__main__':
+    fm_server_command()

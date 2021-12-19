@@ -19,15 +19,68 @@ class NotAuthorized(Exception):
     """Exception denoting the caller is not authorized."""
 
 
-class BaseRequestHandler(web.RequestHandler):
+
+def get_static_file_location():
+    return os.path.realpath(os.path.join(
+        os.path.dirname(__file__), 'static'
+    ))
+
+
+class FmServerContext(object):
+
+    def __init__(self, driver, auth_dict, options=None):
+        self._driver = driver
+        self._auth_dict = auth_dict if auth_dict else {}
+        options = options if options else {}
+        self._default_frequency = options.get('default_frequency', '107.3M')
+
+    @property
+    def driver(self):
+        """Return the driver for this context."""
+        return self._driver
+
+    async def start(self):
+        # Start the driver.
+        logger.info('Starting on frequency: %s', self._default_frequency)
+        await self.driver.start(self._default_frequency)
+
+    async def stop(self):
+        self.driver.stop()
+        await self.driver.wait()
+
+    def generate_app(self, include_static_files=True):
+        # Now that the process is started, setup the server.
+        routes = [
+            (r'/api/radio/audio(\.[a-zA-Z0-9]+)?',
+                ProcessAudioHandler, dict(context=self)),
+            (r'/api/frequency', FrequencyHandler, dict(context=self)),
+            (r'/api/procinfo', ContextInfoHandler, dict(context=self)),
+        ]
+        if include_static_files:
+            routes.extend([
+                (r'/', web.RedirectHandler, dict(url='/static/index.html')),
+                (r'/static/(.*)', web.StaticFileHandler, dict(
+                    path=get_static_file_location()))
+            ])
+        return web.Application(routes)
+
+
+class FmRequestHandler(web.RequestHandler):
+
+    def initialize(self, context=None):
+        """Initialize the handler with the current context."""
+        self._context = context
 
     def get_driver(self):
+        """Get the FM driver for the handler."""
         return self.get_context().driver
 
     def get_context(self):
-        return self.application.settings['context']
+        """Get the current FMServerContext for the handler."""
+        return self._context
 
     def send_status(self, code, message):
+        """Helper to send a JSON message for the given status."""
         self.set_status(code)
         self.write(dict(status=code, message=message))
 
@@ -56,7 +109,7 @@ class BaseRequestHandler(web.RequestHandler):
                 raise NotAuthorized()
 
 
-class FrequencyHandler(BaseRequestHandler):
+class FrequencyHandler(FmRequestHandler):
 
     async def get(self):
         try:
@@ -73,7 +126,7 @@ class FrequencyHandler(BaseRequestHandler):
         try:
             self._process_auth_header()
         except Exception:
-            self.set_header('WWW-Authenticate', 'Basic realm="PySDRWeb"')
+            self.set_header('WWW-Authenticate', 'Basic realm="FM SDR Server"')
             self.send_status(401, 'Authentication required!')
             return
         try:
@@ -94,7 +147,7 @@ class FrequencyHandler(BaseRequestHandler):
             self.send_status(500, 'Internal Server Error')
 
 
-class ContextInfoHandler(BaseRequestHandler):
+class ContextInfoHandler(FmRequestHandler):
 
     async def get(self):
         try:
@@ -108,7 +161,7 @@ class ContextInfoHandler(BaseRequestHandler):
 
 
 async def _stream_audio(req_handler, driver, timeout, fmt):
-    """Helper that streams  the audio."""
+    """Helper that streams the audio."""
     try:
         # Disable the cache for these requests.
         req_handler.set_header('Cache-Control', 'no-cache')
@@ -121,7 +174,7 @@ async def _stream_audio(req_handler, driver, timeout, fmt):
         req_handler.send_status(500, "Internal Server Error.")
 
 
-class ProcessAudioHandler(BaseRequestHandler):
+class ProcessAudioHandler(FmRequestHandler):
     """Handler that streams the audio in the requested format.
 
     This handler defers all of its calls to the local driver. The format
@@ -152,126 +205,3 @@ class ProcessAudioHandler(BaseRequestHandler):
             await _stream_audio(self, driver, timeout, ext)
         except Exception:
             self.send_status(400, "Bad 'timeout' parameter!")
-
-
-def get_api_routes():
-    """Return the main API routes (for use with tornado.web.Application).
-
-    NOTE: All of the routes here are prefixed with: '/api'
-    """
-    return [
-        (r'/api/radio/audio(\.[a-zA-Z0-9]+)?', ProcessAudioHandler),
-        (r'/api/frequency', FrequencyHandler),
-        (r'/api/procinfo', ContextInfoHandler),
-    ]
-
-
-class Context(object):
-
-    def __init__(self, driver, auth_dict):
-        self.driver = driver
-        if auth_dict:
-            auth_type = auth_dict.get('type', 'none').lower()
-            if auth_type not in set(['basic', 'none', 'null']):
-                raise ValueError(
-                    'Unsupported auth type: {}'.format(auth_type))
-            self.auth_dict = auth_dict
-        else:
-            self.auth_dict = {}
-
-    @property
-    def admin_user(self):
-        return self.auth_dict.get('user', 'admin')
-
-    @property
-    def admin_password(self):
-        return self.auth_dict.get('password')
-
-
-class Server(object):
-
-    def __init__(self, context, port=None):
-        # self.config = config
-        self._context = context
-        self._port = port or 8000
-
-        self._shutdown_hooks = []
-        self._drain_hooks = []
-
-        # Store the IOLoop here for reference when shutting down.
-        self._loop = None
-
-    def run(self):
-        self._loop = ioloop.IOLoop.current()
-        try:
-            self._loop.add_callback(self._start)
-
-            # Run the loop.
-            self._loop.start()
-        except Exception:
-            logger.exception("Error in IOLoop!")
-        # Run the shutdown hooks.
-        logger.info("Running %d shutdown hooks.", len(self._shutdown_hooks))
-        for hook in reversed(self._shutdown_hooks):
-            try:
-                hook()
-            except Exception:
-                logger.exception('Failed to run shutdown hook!')
-        logger.info("Server should be stopped.")
-
-    def stop(self, from_signal_handler=False):
-        logger.info('Server shutdown requested.')
-        if from_signal_handler:
-            self._loop.add_callback_from_signal(self._stop)
-        else:
-            self._loop.add_callback(self._stop)
-
-    async def _start(self):
-        # Start the driver.
-        frequency = '107.3M'
-        logger.info('Starting on frequency: %s', frequency)
-        await self._context.driver.start(frequency)
-        # Register the driver to stop.
-        async def _stop_driver():
-            self._context.driver.stop()
-            await self._context.driver.wait()
-        self._drain_hooks.append(_stop_driver)
-
-        # Now that the process is started, setup the server.
-        routes = get_api_routes()
-        routes.extend([
-            (r'/', web.RedirectHandler, dict(url='/static/index.html')),
-            (r'/static/(.*)', web.StaticFileHandler, dict(
-                path=get_static_file_location()))
-        ])
-        app = web.Application(routes, context=self._context)
-
-        logger.info('Running server on port: %d', self._port)
-        sockets = netutil.bind_sockets(self._port)
-        server = httpserver.HTTPServer(app)
-        server.add_sockets(sockets)
-
-        async def _close_server():
-            server.stop()
-            await server.close_all_connections()
-        self._drain_hooks.append(_close_server)
-
-    async def _stop(self):
-        # Run the drain hooks in reverse.
-        timeout = 5
-        for hook in reversed(self._drain_hooks):
-            try:
-                await asyncio.wait_for(hook(), timeout)
-            except asyncio.TimeoutError:
-                logger.warning('Drain hook timed out after %d seconds.',
-                               timeout)
-            except Exception:
-                logger.exception('Error running drain hook!')
-        # Stop the current loop.
-        ioloop.IOLoop.current().stop()
-
-
-def get_static_file_location():
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    file_path = os.path.join(dir_path, '..', 'static')
-    return os.path.realpath(file_path)

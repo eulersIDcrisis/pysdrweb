@@ -10,6 +10,7 @@ import yaml
 import click
 # Local imports.
 from pysdrweb.util.logger import logger
+from pysdrweb.util.misc import get_version
 from pysdrweb.server.handlers import Context, Server
 from pysdrweb.driver.loader import get_driver_mapping
 
