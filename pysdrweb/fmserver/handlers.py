@@ -10,9 +10,9 @@ import os
 import base64
 import asyncio
 from functools import wraps
-from tornado import ioloop, httpserver, netutil, web
+from tornado import ioloop, iostream, httpserver, netutil, web
 from pysdrweb.util.logger import logger
-from pysdrweb.driver.common import UnsupportedFormatError
+from pysdrweb.fmserver import encoder
 
 
 class NotAuthorized(Exception):
@@ -166,7 +166,7 @@ async def _stream_audio(req_handler, driver, timeout, fmt):
         # Disable the cache for these requests.
         req_handler.set_header('Cache-Control', 'no-cache')
         await driver.process_request(req_handler, fmt, timeout)
-    except UnsupportedFormatError as exc:
+    except encoder.UnsupportedFormatError as exc:
         req_handler.send_status(400, str(exc))
     except Exception:
         logger.exception(
@@ -189,10 +189,17 @@ class ProcessAudioHandler(FmRequestHandler):
     """
 
     async def get(self, ext):
-        if not ext:
-            ext = 'MP3'
-        if ext.startswith('.'):
-            ext = ext[1:]
+        try:
+            if not ext:
+                ext = 'MP3'
+            if ext.startswith('.'):
+                ext = ext[1:]
+            # Make sure this is upper case.
+            ext = ext.upper()
+        except Exception:
+            self.send_status(400, 'Bad format!')
+            return
+
         driver = self.get_driver()
 
         # Parse the timeout query parameter.
@@ -200,8 +207,27 @@ class ProcessAudioHandler(FmRequestHandler):
             timeout = self.get_argument('timeout', None)
             if timeout is not None:
                 timeout = float(timeout)
-
-            # The helper takes control of the request once called.
-            await _stream_audio(self, driver, timeout, ext)
         except Exception:
             self.send_status(400, "Bad 'timeout' parameter!")
+
+        # Now, try and encode the request. Any exceptions at this point are
+        # either 'UnsupportedFormatError' which maps to a 400 code, or
+        # anything else, which maps to a 500 code, or just stops the request
+        # in transit (i.e. because the data has already started streaming).
+        try:
+            content_type = encoder.get_mime_type_for_format(ext)
+            file_obj = encoder.RequestFileHandle(self)
+            # Start encoding.
+            async def _flush():
+                await self.flush()
+            await encoder.encode_from_driver(
+                driver, file_obj, ext, timeout, async_flush=_flush)
+        except encoder.UnsupportedFormatError as exc:
+            self.send_status(404, str(exc))
+        except iostream.StreamClosedError:
+            # Expected. Exit cleanly.
+            return
+        except Exception:
+            logger.exception('Error encoding PCM data!')
+            # Attempt to send the error.
+            self.send_status(500, 'Internal Server Error')

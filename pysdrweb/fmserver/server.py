@@ -84,12 +84,18 @@ def fm_server_command(port, frequency, rtl, unix, verbose, config):
     elif 'port' not in option_dict:
         # The default port is 9000
         option_dict['port'] = [9000]
+    else:
+        # In case the result is a tuple instead of a list.
+        option_dict['port'] = list(option_dict['port'])
     # UNIX domain socket.
     if unix:
         curr_ports = option_dict.get('port', [])
         if isinstance(curr_ports, int):
-            option_dict['port'] = [curr_ports]
-        option_dict['port'].append('unix:{}'.format(unix))
+            curr_ports = [curr_ports]
+        elif not isinstance(curr_ports, list):
+            curr_ports = list(curr_ports)
+        curr_ports.append('unix:{}'.format(unix))
+        option_dict['port'] = curr_ports
     # Final, parsed ports
     ports = option_dict['port']
 
@@ -108,15 +114,11 @@ def fm_server_command(port, frequency, rtl, unix, verbose, config):
 
     app = context.generate_app()
     server = IOLoopContext()
+    server.ioloop.add_callback(context.start)
     server.create_http_server(app, ports)
     port_msg = ', '.join(['{}'.format(port) for port in ports])
     logger.info("Running server on ports: %s", port_msg)
     server.run()
-
-    print("PORT: ", port)
-    print("rtl: ", rtl)
-    print("config: ", config)
-    print("unix: ", unix)
 
 
 class Server(object):

@@ -2,22 +2,24 @@
 
 Drivers for the FMServerContext
 """
+import shlex
 import asyncio
 import subprocess
 from collections import deque
 
 # Local imports.
-from pysdrweb.util.misc import find_executable
+from pysdrweb.util.logger import get_child_logger
+from pysdrweb.util.misc import find_executable, read_lines_from_stream
 
 
-class UnsupportedFormatError(Exception):
-    """Exception indicating an unsupported format."""
+logger = get_child_logger('fmdriver')
 
 
 class AbstractRtlDriver(object):
     """Abstract driver that provides PCM data asynchronously."""
 
-    def __init__(self, max_chunk_count=None):
+    def __init__(self, nchannels=1, framerate=44100, sample_width=2,
+                 max_chunk_count=None):
         """Create the RtlDriver.
 
         'max_chunk_count' configures the maximum number of chunks to store,
@@ -30,7 +32,38 @@ class AbstractRtlDriver(object):
 
         self._buffer = deque(maxlen=max_chunk_count)
         self._buffer_cond = asyncio.Condition()
+        self._buffer_queues = dict()
+        self._next_key = 1
         self._stop_requested = asyncio.Event()
+
+        self._nchannels = nchannels
+        self._framerate = framerate
+        self._sample_width = sample_width
+
+    @property
+    def framerate(self):
+        """Sampling rate of the PCM data (in Hz)."""
+        return self._framerate
+
+    @property
+    def sample_rate(self):
+        """The sampling rate of the PCM data (in Hz). Alias of framerate."""
+        return self.framerate
+
+    @property
+    def sample_width(self):
+        """The width of each sample (in bytes)."""
+        return self._sample_width
+
+    @property
+    def nchannels(self):
+        """Number of channels for each sample."""
+        return self._nchannels
+
+    @property
+    def frame_size(self):
+        """Number of bytes per single frame/sample of PCM data."""
+        return self._nchannels * self._sample_width
 
     @property
     def frequency(self):
@@ -129,23 +162,10 @@ class AbstractRtlDriver(object):
 
         Also queues this data for anyone iterating over the PCM data.
         """
+        self._buffer.append(chunk)
         async with self._buffer_cond:
             for queue in self._buffer_queues.values():
-                queue.put_nowait(data)
-
-    async def _wait_to_join_queues(self):
-        """Wait for all of the queues to drain before exiting.
-
-        Useful for subclasses and the like to drain quietly. This should
-        usually be added via 'add_awaitable()' inside a subclass's version
-        of 'async def start()'
-        """
-        # First, wait for the stop event. We don't want to wait for the queues
-        # until a stop is actually requested.
-        await self._stop_requested.wait()
-        async with self._buffer_cond:
-            while len(self._buffer_queues) > 0:
-                await self._buffer_cond.wait()
+                queue.put_nowait(chunk)
 
     async def pcm_data_generator(self):
         """Generator to iterate over the PCM data received.
@@ -173,8 +193,10 @@ class AbstractRtlDriver(object):
             iter_queue = asyncio.Queue()
 
             # Preload the queue with all of the data currently in the deque.
-            for chunk in self._pcm_buffer:
-                iter_queue.put_nowait(data)
+            count = 0
+            for chunk in self._buffer:
+                count += 1
+                iter_queue.put_nowait(chunk)
 
             # Add this buffer to receive new data from the handler as it is
             # received. This is protected by a condition variable, so acquire
@@ -196,6 +218,20 @@ class AbstractRtlDriver(object):
                 self._buffer_queues.pop(qid, None)
                 self._buffer_cond.notify_all()
 
+    async def _wait_to_join_queues(self):
+        """Wait for all of the queues to drain before exiting.
+
+        Useful for subclasses and the like to drain quietly. This should
+        usually be added via 'add_awaitable()' inside a subclass's version
+        of 'async def start()'
+        """
+        # First, wait for the stop event. We don't want to wait for the queues
+        # until a stop is actually requested.
+        await self._stop_requested.wait()
+        async with self._buffer_cond:
+            while len(self._buffer_queues) > 0:
+                await self._buffer_cond.wait()
+
 
 class RtlFmExecDriver(AbstractRtlDriver):
     """Driver that runs rtl_fm directly, then encodes the data on request.
@@ -206,8 +242,6 @@ class RtlFmExecDriver(AbstractRtlDriver):
     then catches the input into a sliding window buffer. Then, the data
     will be encoded upon request into WAV, AIFF, or other formats.
     """
-
-    name = 'native'
 
     @classmethod
     def from_config(cls, config):
@@ -222,19 +256,20 @@ class RtlFmExecDriver(AbstractRtlDriver):
     def __init__(self, config):
         # TODO -- Probably should not assume this path, but it works for now.
         self._rtlfm_exec_path = config['rtl_fm']
-
-        self._framerate = config.get('framerate', 48000)
-        # RTL-FM dumps its output into one channel, each sample 2 bytes long.
-        # The frame-rate/sample-rate is somewhat configurable, however.
-        self._nchannels = 1
-        self._sample_width = 2
+        framerate = config.get('framerate', 48000)
 
         # Extract the buffer size.
         kb_buffer_size = int(config.get('kb_buffer_size', 128))
-        super(RtlFmExecDriver, self).__init__(max_chunk_count=kb_buffer_size)
+        super(RtlFmExecDriver, self).__init__(
+            # RTL-FM dumps its output into one channel, each sample 2 bytes
+            # long. The frame-rate/sample-rate is somewhat configurable,
+            # however.
+            nchannels=1, sample_width=2, framerate=framerate,
+            max_chunk_count=kb_buffer_size)
 
     async def _read_kb_chunks_into_buffer(self, stm):
         while not stm.at_eof():
+            data = None
             try:
                 data = await stm.readexactly(1024)
             except asyncio.IncompleteReadError as e:
@@ -242,19 +277,17 @@ class RtlFmExecDriver(AbstractRtlDriver):
                     data = e.partial
                 else:
                     continue
-            for queue in self._buffer_queues.values():
-                queue.put_nowait(data)
+            await self.add_pcm_chunk(data)
         # Push 'None' into every queue; this signals to stop iterating.
         for queue in self._buffer_queues.values():
             queue.put_nowait(None)
 
     async def start(self, frequency):
-        self._stop_requested.clear()
         rtl_cmd = [
             shlex.quote(self._rtlfm_exec_path),
             # Configure the frequency here.
             '-f', shlex.quote('{}'.format(frequency)),
-            '-s', '200k', '-r', shlex.quote('{}'.format(self._framerate)),
+            '-s', '200k', '-r', shlex.quote('{}'.format(self.framerate)),
             '-A', 'fast', '-'
         ]
         rtl_proc = await asyncio.create_subprocess_exec(

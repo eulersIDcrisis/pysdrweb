@@ -5,7 +5,7 @@ Logging utilities for web_radio.
 import logging
 
 
-logger = logging.getLogger('webradio')
+logger = logging.getLogger('pysdrweb')
 
 
 def get_child_logger(name):

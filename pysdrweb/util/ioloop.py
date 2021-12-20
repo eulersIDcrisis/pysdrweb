@@ -2,9 +2,12 @@
 
 Utilities for managing the IOLoop in pysdrweb.
 """
+import os
+import signal
 import asyncio
 from functools import partial
 from tornado import ioloop, httpserver, netutil
+from pysdrweb.util.logger import logger
 
 
 UNIX_PREFIX = 'unix:'
@@ -88,8 +91,15 @@ class IOLoopContext(object):
 
         return server
 
-    def run(self):
+    def run(self, register_sighandler=True):
         """Run the IOLoop on the thread this method is called."""
+        if register_sighandler:
+            # Setup the signal handler.
+            def _sighandler(signum, stack_frame):
+                self.stop(from_signal_handler=True)
+            signal.signal(signal.SIGINT, _sighandler)
+            signal.signal(signal.SIGTERM, _sighandler)
+
         try:
             # Run the loop.
             self._loop.start()
@@ -119,6 +129,8 @@ class IOLoopContext(object):
 
     async def _stop(self):
         """Helper to stop the IOLoop by running the drain hooks."""
+        logger.info("Running %d callbacks to drain the server.",
+                    len(self._drain_hooks))
         # Run the drain hooks in reverse.
         timeout = 5
         for hook in reversed(self._drain_hooks):
