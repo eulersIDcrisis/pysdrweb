@@ -159,6 +159,9 @@ class ProcessAudioHandler(FmRequestHandler):
             return
 
         driver = self.get_driver()
+        if not driver.is_running():
+            self.send_status(409, "Driver is not running!")
+            return
 
         # Parse the timeout query parameter.
         try:
@@ -167,6 +170,7 @@ class ProcessAudioHandler(FmRequestHandler):
                 timeout = float(timeout)
         except Exception:
             self.send_status(400, "Bad 'timeout' parameter!")
+            return
 
         # Now, try and encode the request. Any exceptions at this point are
         # either 'UnsupportedFormatError' which maps to a 400 code, or
