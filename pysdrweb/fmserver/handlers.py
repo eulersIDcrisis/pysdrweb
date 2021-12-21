@@ -12,32 +12,30 @@ import asyncio
 from functools import wraps
 from tornado import ioloop, iostream, httpserver, netutil, web
 from pysdrweb.util.logger import logger
+from pysdrweb.util.auth import authenticated
 from pysdrweb.fmserver import encoder
-
-
-class NotAuthorized(Exception):
-    """Exception denoting the caller is not authorized."""
-
-
-
-def get_static_file_location():
-    return os.path.realpath(os.path.join(
-        os.path.dirname(__file__), 'static'
-    ))
 
 
 class FmServerContext(object):
 
-    def __init__(self, driver, auth_dict, options=None):
+    def __init__(self, driver, auth_manager, default_frequency=None):
         self._driver = driver
-        self._auth_dict = auth_dict if auth_dict else {}
-        options = options if options else {}
-        self._default_frequency = options.get('default_frequency', '107.3M')
+        self._auth_manager = auth_manager
+        if default_frequency:
+            self._default_frequency = default_frequency
+        else:
+            # Pick some random frequency. This should be passed, usually.
+            self._default_frequency = '107.3M'
 
     @property
     def driver(self):
         """Return the driver for this context."""
         return self._driver
+
+    @property
+    def auth_manager(self):
+        """Return the AuthManager for this context."""
+        return self._auth_manager
 
     async def start(self):
         # Start the driver.
@@ -84,33 +82,10 @@ class FmRequestHandler(web.RequestHandler):
         self.set_status(code)
         self.write(dict(status=code, message=message))
 
-    def _process_auth_header(self):
-        context = self.get_context()
-        # Check for the authentication header.
-        header = self.request.headers.get('Authorization', None)
-        if context.auth_type == 'basic':
-            if not header:
-                raise NotAuthorized()
-            HEADER_PREFIX = 'Basic '
-            if not header.startswith(HEADER_PREFIX):
-                raise NotAuthorized()
-            try:
-                # Decode the header as a string.
-                decoded = base64.b64decode(
-                    # Drop the 'Basic ' portion of the header.
-                    header[len(HEADER_PREFIX):]
-                ).decode('utf-8')
-                user, password = decoded.split(':', 1)
-                if (user != context.admin_user or
-                        password != context.admin_password):
-                    raise Exception('Password did not match!')
-            except Exception as exc:
-                logger.error('Error decoding token: %s', exc)
-                raise NotAuthorized()
-
 
 class FrequencyHandler(FmRequestHandler):
 
+    @authenticated(readonly=True)
     async def get(self):
         try:
             driver = self.get_driver()
@@ -122,13 +97,8 @@ class FrequencyHandler(FmRequestHandler):
             logger.exception('Error fetching frequency!')
             self.send_status(500, 'Internal Server Error')
 
+    @authenticated(readonly=False)
     async def post(self):
-        try:
-            self._process_auth_header()
-        except Exception:
-            self.set_header('WWW-Authenticate', 'Basic realm="FM SDR Server"')
-            self.send_status(401, 'Authentication required!')
-            return
         try:
             new_freq = self.get_argument('frequency')
         except Exception:
@@ -149,6 +119,7 @@ class FrequencyHandler(FmRequestHandler):
 
 class ContextInfoHandler(FmRequestHandler):
 
+    @authenticated(readonly=True)
     async def get(self):
         try:
             driver = self.get_driver()
@@ -158,20 +129,6 @@ class ContextInfoHandler(FmRequestHandler):
             logger.exception('Error fetching context/driver information!')
             self.set_status(500)
             self.write(dict(status=500, message="Internal Server Error"))
-
-
-async def _stream_audio(req_handler, driver, timeout, fmt):
-    """Helper that streams the audio."""
-    try:
-        # Disable the cache for these requests.
-        req_handler.set_header('Cache-Control', 'no-cache')
-        await driver.process_request(req_handler, fmt, timeout)
-    except encoder.UnsupportedFormatError as exc:
-        req_handler.send_status(400, str(exc))
-    except Exception:
-        logger.exception(
-            "Error streaming audio! Driver: %s Format: %s", driver.name, fmt)
-        req_handler.send_status(500, "Internal Server Error.")
 
 
 class ProcessAudioHandler(FmRequestHandler):
@@ -188,6 +145,7 @@ class ProcessAudioHandler(FmRequestHandler):
             so that the file can be treated as a download by the browser.
     """
 
+    @authenticated(readonly=True)
     async def get(self, ext):
         try:
             if not ext:
@@ -231,3 +189,10 @@ class ProcessAudioHandler(FmRequestHandler):
             logger.exception('Error encoding PCM data!')
             # Attempt to send the error.
             self.send_status(500, 'Internal Server Error')
+
+
+def get_static_file_location():
+    """Return the static files relative to this directory."""
+    return os.path.realpath(os.path.join(
+        os.path.dirname(__file__), 'static'
+    ))

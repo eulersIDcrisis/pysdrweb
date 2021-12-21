@@ -4,8 +4,10 @@ Server utilities for the FM server mode for the RTL-SDR dongle.
 """
 import os
 import logging
+import yaml
 import click
 from pysdrweb.util.misc import get_version
+from pysdrweb.util.auth import parse_auth_manager_from_options
 from pysdrweb.util.ioloop import IOLoopContext
 from pysdrweb.util.logger import get_child_logger
 from pysdrweb.fmserver.driver import RtlFmExecDriver
@@ -107,10 +109,11 @@ def fm_server_command(port, frequency, rtl, unix, verbose, config):
     if frequency:
         option_dict['default_frequency'] = frequency
 
-    print("OPTIONS: ", option_dict)
     # Create the driver.
+    auth_manager = parse_auth_manager_from_options(option_dict)
     driver = RtlFmExecDriver.from_config(option_dict.get('driver', {}))
-    context = FmServerContext(driver, {})
+    context = FmServerContext(
+        driver, auth_manager, option_dict.get('default_frequency'))
 
     app = context.generate_app()
     server = IOLoopContext()
