@@ -6,12 +6,15 @@ import os
 import shlex
 import subprocess
 # Import to extract the version information.
-from pysdrweb.__about__ import __version__
+import pkg_resources
 
 
 def get_version():
     """Return the version of pysdrweb."""
-    return __version__
+    try:
+        return pkg_resources.get_distribution('pysdrweb').version
+    except Exception:
+        return 'local'
 
 
 async def read_lines_from_stream(read_stream, callback, encoding='utf-8'):

@@ -86,9 +86,9 @@ def fm_server_command(port, frequency, rtl, unix, verbose, config):
     elif 'port' not in option_dict:
         # The default port is 9000
         option_dict['port'] = [9000]
-    else:
+    elif isinstance(option_dict['port'], int):
         # In case the result is a tuple instead of a list.
-        option_dict['port'] = list(option_dict['port'])
+        option_dict['port'] = [option_dict['port']]
     # UNIX domain socket.
     if unix:
         curr_ports = option_dict.get('port', [])

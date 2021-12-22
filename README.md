@@ -5,11 +5,18 @@ Project to create a web interface to RTL-SDR tooling.
 ## FM Radio Receiver
 
 The first focus of the project is to make a simple, web-based
-FM Radio receiver that can be controlled entirely through the
-browser or REST API calls. These calls are all backed by some
-_driver_, which implements the set of calls necessary to run
-the radio, i.e. calls to generate a raw PCM data stream that
-is then encoded on the fly.
+FM Radio receiver that can be controlled entirely through a
+web browser. By visiting the main page, the user can listen in
+on an (FM) radio station using any compatible RTL-SDR dongle
+and change the frequency, as desired.
+
+This receiver is backed by some _driver_, which implements the
+set of calls necessary to run the radio, i.e. calls to generate
+a raw PCM data stream that is then encoded on the fly. Usually,
+this driver is simply the RTL-SDR program: `rtl_fm`, which the
+server searches for by default.
+(Other driver types are planned for the future, but are not yet
+implemented.)
 
 By default, python supports some (usually uncompressed) formats
 out of the box:
@@ -27,6 +34,13 @@ this can also encode into more formats:
 (The list isn't exhaustive, but the goal is to support more
 browsers, not as many formats. The code should be easy enough
 to add more formats, however, if that is ever really needed.)
+
+Currently, this server appears to work on Firefox and Chrome,
+which support dynamically playing audio as it is downloaded.
+The hope is to support Safari in the future, but this is not
+yet implemented.
+
+### Goal
 
 The goal of this server is to support multiple formats and
 multiple clients simultaneously, without straining _too_ many
@@ -72,7 +86,7 @@ port: 9000
 default_frequency: 107.3M
 # Driver settings.
 driver:
-  type: native
+  # Path to rtl_fm, if not on the path of the server.
   rtl_fm: /usr/local/bin/rtl_fm
   # Optional.
   kb_buffer_size: 128
@@ -83,7 +97,44 @@ sdrfm_server -c config.yml
 ```
 This permits adding authentication as well.
 
-### How It Works
+## Server REST API
+
+Currently, the server supports a REST API that the main page
+invokes to render. The main calls are described below:
+
+| Method | Route | Description |
+---------|-------|-------------|
+| GET | `/api/frequency` | Returns the current frequency the server is listening on. |
+| POST | `/api/frequency` | Change the frequency the server is listening on. |
+| GET | `/api/procinfo` | Returns any (stderr) logging for the current driver. |
+| GET | `/api/radio/audio.<ext>` | Fetch the audio streamed from the radio. |
+
+### Audio Route (More Detail)
+
+Much of this server relies on `/api/radio/audio.<ext>` to function since this
+is the route that actually serves the audio file. This route uses the given
+`<ext>` extension to determine the format to stream in. The route also accepts
+an optional `timeout` parameter, telling the server how long to listen for (in
+seconds). If not passed, the server will continue streaming indefinitely.
+
+To download 10 seconds of the audio in WAV format (assuming the server is
+running locally on port 8080) call:
+```sh
+curl http://localhost:8080/api/radio/audio.wav?timeout=10 > audio.wav
+```
+
+If a format is not supported, the response will indicate as such.
+
+### Authentication
+
+By default, the requests are not authenticated. If configured, however,
+the requests can all require authentication using "HTTP Basic"-style
+authentication. When making a request, the browser will prompt for the
+username/password combination.
+
+Other authentication may be added later.
+
+## How It Works
 
 For simplicity, the RTL-SDR tooling includes `rtl_fm`, which
 streams FM audio data as raw, mono, 16-bit (2 byte) PCM data

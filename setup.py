@@ -2,30 +2,16 @@
 
 Installing pysdrweb.
 """
-from setuptools import setup, find_packages
-import os
-
-def get_version():
-    version = {}
-    path = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), 'pysdrweb', '__about__.py'
-    ))
-    with open(path, 'r') as stm:
-        code = stm.read()
-    exec(code, version)
-    return version.get('__version__', '(unknown)')
+from setuptools import setup
 
 
-VERSION = get_version()
+VERSION = '0.2.1'
 
 
 # NOTE: The 'version' is set via setup.cfg.
 setup(
-    name='pysdrweb',
     version=VERSION,
-    description='FM Web Radio using RTL-SDR utilities.',
-    author='eulersIDcrisis',
-    packages=find_packages(include=['pysdrweb', 'pysdrweb.*']),
+    keywords='radio fm rtl-sdr rtl_fm',
     install_requires=[
         # Require 'tornado', minimum version of 6.0.1
         # Could possibly waive this to tornado 5.X, not sure.
@@ -41,7 +27,7 @@ setup(
     setup_requires=['flake8'],
     entry_points={
         'console_scripts': [
-            'sdrfm_server=pysdrweb.server.main:main_cli'
+            'sdrfm_server=pysdrweb.fmserver.server:fm_server_command'
         ]
     }
 )
