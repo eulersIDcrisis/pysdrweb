@@ -50,8 +50,8 @@ If `rtl_fm` is not on the path, that can be passed in with:
 sdrfm_server -p 8080 -f 107.3M -m ${RTL_FM_PATH}
 ```
 
-For the full set of options, it is easier to configured the
-command with a configuration file. A sample configuration file
+For the full set of options, it is easier to configure the
+server with a configuration file. A sample configuration file
 is shown below:
 ```yaml
 #
@@ -81,6 +81,7 @@ Then, to run the server:
 ```sh
 sdrfm_server -c config.yml
 ```
+This permits adding authentication as well.
 
 ### How It Works
 
@@ -93,8 +94,10 @@ shell pipeline streams the frequency `107.3M` to an MP3 file:
 rtl_fm -f 107.3M -M fm -s 48000 | \
 sox -traw -r48000 -es -b16 -c1 -V1 - -tmp3 - > output.mp3
 ```
-The quality is quite bad; we need to sample more quickly then
-resample down to a lower frequency:
+The `sox` command is used to convert raw PCM data into framed
+MP3 data. (It is possible to use `ffmpeg` in a similar vain as
+well). The quality is quite bad; we need to sample more quickly
+then resample down to a lower frequency:
 ```sh
 # Sample at 200k, then resample down to 48k.
 # Passing '-A fast' denotes the way to perform the resample.
@@ -112,7 +115,8 @@ socat -u - TCP-LISTEN:8080
 This pipeline is cool, but has some obvious problems. In
 particular, the pipeline ends as soon as the browser stops
 listening for any more input. Also, only one browser/client
-can listen at a time. Once finished, the command must be
+can listen at a time. (Also, some browsers might not support
+this for some formats...) Once finished, the command must be
 executed again.
 Changing the frequency also requires rerunning or otherwise
 changing the command.

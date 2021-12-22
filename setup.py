@@ -32,6 +32,10 @@ setup(
         'tornado>=6.0.1',
         'PyYAML>=5.4.1',
         'click>=5.0.0',
+        # SoundFile might require libsnd to be installed manually.
+        # We _could_ make this dependency optional, possibly, but
+        # 'native' python sound formats are uncompressed and quite
+        # large.
         'SoundFile>=0.10.0',
     ],
     setup_requires=['flake8'],
