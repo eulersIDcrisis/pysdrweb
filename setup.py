@@ -37,7 +37,7 @@ setup(
     setup_requires=['flake8'],
     entry_points={
         'console_scripts': [
-            'pysdr_fmserver=pysdrweb.server.main:main_cli'
+            'sdrfm_server=pysdrweb.server.main:main_cli'
         ]
     }
 )
