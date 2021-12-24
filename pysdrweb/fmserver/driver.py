@@ -9,7 +9,7 @@ from collections import deque
 
 # Local imports.
 from pysdrweb.util.logger import get_child_logger
-from pysdrweb.util.misc import find_executable, read_lines_from_stream
+from pysdrweb.util import misc
 
 
 logger = get_child_logger('fmdriver')
@@ -19,7 +19,7 @@ class AbstractRtlDriver(object):
     """Abstract driver that provides PCM data asynchronously."""
 
     def __init__(self, nchannels=1, framerate=44100, sample_width=2,
-                 max_chunk_count=None):
+                 max_chunk_count=None, seq_index=0):
         """Create the RtlDriver.
 
         'max_chunk_count' configures the maximum number of chunks to store,
@@ -30,10 +30,13 @@ class AbstractRtlDriver(object):
         self._frequency = '107.3M'
         self._log = deque()
 
+        # Data buffer and indexing.
         self._buffer = deque(maxlen=max_chunk_count)
+        self._seq_index = seq_index
+        # Buffer queues and related keys.
         self._buffer_cond = asyncio.Condition()
         self._buffer_queues = dict()
-        self._next_key = 1
+        self._next_qid = 1
         self._stop_requested = asyncio.Event()
 
         self._nchannels = nchannels
@@ -61,7 +64,7 @@ class AbstractRtlDriver(object):
         return self._nchannels
 
     @property
-    def frame_size(self):
+    def framesize(self):
         """Number of bytes per single frame/sample of PCM data."""
         return self._nchannels * self._sample_width
 
@@ -162,12 +165,15 @@ class AbstractRtlDriver(object):
 
         Also queues this data for anyone iterating over the PCM data.
         """
-        self._buffer.append(chunk)
+        seq_index = self._seq_index
+        self._seq_index += 1
+        item = misc.PCMBufferItem(seq_index, chunk)
+        self._buffer.append(item)
         async with self._buffer_cond:
             for queue in self._buffer_queues.values():
-                queue.put_nowait(chunk)
+                queue.put_nowait(item)
 
-    async def pcm_data_generator(self):
+    async def pcm_item_generator(self, start_seq_index=-1):
         """Generator to iterate over the PCM data received.
 
         This will keep returning PCM data in chunks, along with a timestamp to
@@ -176,15 +182,24 @@ class AbstractRtlDriver(object):
 
         This will stop iterating when a stop (or frequency change or similar)
         is requested.
+
+        Parameters
+        ----------
+        start_address: PCMBufferAddress or None
+            The start address to iterate from. 'None' implies the very start.
+
+        Yields
+        ------
+        PCMBufferItem: Data as it is ready.
         """
         if self._stop_requested.is_set():
             return
-        qid = self._next_key
+        qid = self._next_qid
         # Prevent unbounded growth of the key.
-        if self._next_key >= 4294967295:  # 2 ^ 32 - 1
-            self._next_key = 1
+        if self._next_qid >= 4294967295:  # 2 ^ 32 - 1
+            self._next_qid = 1
         else:
-            self._next_key += 1
+            self._next_qid += 1
 
         try:
             # TODO -- We could cap the number of elements in this queue,
@@ -193,10 +208,10 @@ class AbstractRtlDriver(object):
             iter_queue = asyncio.Queue()
 
             # Preload the queue with all of the data currently in the deque.
-            count = 0
-            for chunk in self._buffer:
-                count += 1
-                iter_queue.put_nowait(chunk)
+            for item in self._buffer:
+                # Skip any data before the requested start address.
+                if start_seq_index < item.seq_index:
+                    iter_queue.put_nowait(item)
 
             # Add this buffer to receive new data from the handler as it is
             # received. This is protected by a condition variable, so acquire
@@ -209,10 +224,10 @@ class AbstractRtlDriver(object):
             while True:
                 # If 'None' is parsed out from the queue, this is our cue (ha)
                 # to exit.
-                data = await iter_queue.get()
-                if data is None:
+                item = await iter_queue.get()
+                if item is None:
                     return
-                yield data
+                yield item
         finally:
             async with self._buffer_cond:
                 self._buffer_queues.pop(qid, None)
@@ -247,7 +262,7 @@ class RtlFmExecDriver(AbstractRtlDriver):
     def from_config(cls, config):
         rtlfm = config.get('rtl_fm')
         if not rtlfm:
-            rtlfm = find_executable('rtl_fm')
+            rtlfm = misc.find_executable('rtl_fm')
             if not rtlfm:
                 raise Exception("Could not find path to: rtl_fm")
             config['rtl_fm'] = rtlfm
@@ -295,7 +310,7 @@ class RtlFmExecDriver(AbstractRtlDriver):
         )
         self.add_process_handle(rtl_proc)
         # Read stderr into the log.
-        self.add_awaitable(asyncio.create_task(read_lines_from_stream(
+        self.add_awaitable(asyncio.create_task(misc.read_lines_from_stream(
             rtl_proc.stderr, self.add_log_line)))
         # Read stdout into the buffer.
         self.add_awaitable(asyncio.create_task(
