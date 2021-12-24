@@ -45,6 +45,11 @@ async def close_pipe_on_exit(proc, fd):
 
 
 def find_executable(cmd):
+    """Find the given executable from the current environment.
+
+    NOTE: This effectively runs: `which ${cmd}` and uses the resulting
+    path (if any).
+    """
     cmd = shlex.join(['which', shlex.quote(cmd)])
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
     if proc.stdout:
