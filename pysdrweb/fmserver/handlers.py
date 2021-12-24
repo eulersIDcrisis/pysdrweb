@@ -27,6 +27,9 @@ class FmServerContext(object):
             # Pick some random frequency. This should be passed, usually.
             self._default_frequency = '107.3M'
 
+        from pysdrweb.fmserver.driver import HLSManager
+        self._hls_manager = HLSManager(driver)
+
     @property
     def driver(self):
         """Return the driver for this context."""
@@ -41,10 +44,12 @@ class FmServerContext(object):
         # Start the driver.
         logger.info('Starting on frequency: %s', self._default_frequency)
         await self.driver.start(self._default_frequency)
+        await self._hls_manager.start()
 
     async def stop(self):
         self.driver.stop()
         await self.driver.wait()
+        self._hls_manager.stop()
 
     def generate_app(self, include_static_files=True):
         # Now that the process is started, setup the server.

@@ -263,7 +263,7 @@ async def _process_using_soundfile(
                 if start_address.seq_index == seq_index:
                     idx += start_address.index
 
-                return PCMBufferAddress(seq_index, idx)
+                return misc.PCMBufferAddress(seq_index, idx)
 
             # Otherwise, just write out the full contents of this block, and
             # decrement the number of frames remaining.

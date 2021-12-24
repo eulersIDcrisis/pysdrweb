@@ -2,14 +2,16 @@
 
 Drivers for the FMServerContext
 """
+import io
 import shlex
 import asyncio
 import subprocess
-from collections import deque
+from collections import deque, OrderedDict
 
 # Local imports.
 from pysdrweb.util.logger import get_child_logger
 from pysdrweb.util import misc
+from pysdrweb.fmserver import encoder
 
 
 logger = get_child_logger('fmdriver')
@@ -329,3 +331,72 @@ class RtlFmExecDriver(AbstractRtlDriver):
         self.add_awaitable(asyncio.create_task(
             self._wait_to_join_queues()
         ))
+
+
+#
+# HLS Streaming Utilties
+#
+class HLSManager(object):
+    """Manager that encodes an incoming (PCM) stream into an HLS format."""
+
+    def __init__(self, driver, count=3, secs_per_chunk=5, fmt=None,
+                 start_index=1):
+        """Create the HLSManager that writes audio files for HLS streaming.
+
+        HLS Streaming involves taking a continuous stream of media, then
+        splitting it into smaller 'static' file chunks so that it can be
+        served more efficiently.
+
+        This manager handles the creation (and deletion) of these files as
+        well as various metadata to manage this so that the appropriate data
+        can be served by the backend to support this flow. This stream should
+        not otherwise interfere with the existing PCM driver any more than any
+        other consumer of the PCM data stream.
+
+        The different options configure the format of the static files to be
+        generated, along with the number and duration of these files.
+        """
+        if fmt is None:
+            # Use FLAC by default (if supported), since this should be
+            # supported by most clients. Fallback to WAV, which also should be
+            # supported, if we cannot encode to FLAC.
+            fmt = 'FLAC' if 'FLAC' in encoder.SOUNDFILE_FORMATS else 'WAV'
+        self._fmt = fmt
+        self._chunk_count = count
+        self._secs_per_chunk = secs_per_chunk
+        self._start_index = start_index
+        # Store a mapping of: <index> -> buffer
+        self._file_index = OrderedDict()
+        # Store the driver.
+        self._driver = driver
+        self._stop_requested = asyncio.Event()
+
+    @property
+    def start_index(self):
+        return self._start_index
+
+    def get_data(self, index):
+        return self._file_mapping.get(index)
+
+    async def start(self):
+        remaining_data = bytearray()
+
+        # Iterate over the data, writing out a new file.
+        start_addr = misc.MIN_PCM_ADDRESS
+        while not self._stop_requested.is_set():
+            print("WRITING: ", self._start_index)
+            file_obj = io.BytesIO()
+            start_addr = await encoder.encode_from_driver(
+                self._driver, file_obj, self._fmt, self._secs_per_chunk,
+                start_address=start_addr)
+            self._file_index[self._start_index] = file_obj
+            if len(self._file_index) > self._chunk_count:
+                # Remove the oldest item.
+                index, _ = self._file_index.popitem(last=False)
+                print("REMOVING: ", index)
+
+            print("WROTE: ", self._start_index)
+            self._start_index += 1
+
+    async def stop(self):
+        self._stop_requested.set()
