@@ -243,6 +243,11 @@ class AbstractRtlDriver(object):
         # First, wait for the stop event. We don't want to wait for the queues
         # until a stop is actually requested.
         await self._stop_requested.wait()
+        # Push 'None' into every queue; this signals to stop iterating.
+        for queue in self._buffer_queues.values():
+            queue.put_nowait(None)
+
+        # Drain and wait for the size of the buffer_queues mapping to empty.
         async with self._buffer_cond:
             while len(self._buffer_queues) > 0:
                 await self._buffer_cond.wait()
@@ -293,9 +298,6 @@ class RtlFmExecDriver(AbstractRtlDriver):
                 else:
                     continue
             await self.add_pcm_chunk(data)
-        # Push 'None' into every queue; this signals to stop iterating.
-        for queue in self._buffer_queues.values():
-            queue.put_nowait(None)
 
     async def start(self, frequency):
         rtl_cmd = [
