@@ -59,6 +59,13 @@ class FmServerContext(object):
             (r'/api/frequency', FrequencyHandler, dict(context=self)),
             (r'/api/procinfo', ContextInfoHandler, dict(context=self)),
         ]
+        if self._hls_manager:
+            routes.extend([
+                (r'/api/stream/audio.m3u8', HlsPlaylistHandler,
+                    dict(context=self)),
+                (r'/api/stream/audio([0-9]+)', HlsFileHandler,
+                    dict(context=self)),
+            ])
         if include_static_files:
             routes.extend([
                 (r'/', web.RedirectHandler, dict(url='/static/index.html')),
@@ -198,6 +205,62 @@ class ProcessAudioHandler(FmRequestHandler):
             logger.exception('Error encoding PCM data!')
             # Attempt to send the error.
             self.send_status(500, 'Internal Server Error')
+
+
+#
+# HLS Handlers
+#
+class HlsPlaylistHandler(FmRequestHandler):
+
+    @authenticated(readonly=True)
+    async def get(self):
+        try:
+            manager = self.get_context()._hls_manager
+
+            self.set_header('Content-Type', 'application/x-mpegurl')
+
+            # Write out the file content for the HLS playlist file.
+            self.write(
+                "#EXTM3U\n"
+                "#EXT-X-TARGETDURATION:10\n"
+                "#EXT-X-VERSION:3\n"
+            )
+            secs = manager.secs_per_chunk
+            first_written = False
+            # Write out all of the files.
+            for idx in manager._file_index.keys():
+                if not first_written:
+                    self.write("#EXT-MEDIA-SEQUENCE:{}\n".format(idx))
+                    first_written = True
+                self.write("#EXTINF:{:.2f},\n".format(secs))
+                self.write("audio{}\n".format(idx))
+        except Exception:
+            logger.exception("PLAY ERROR")
+            self.send_status(500, 'Internal Server Error')
+            return
+
+
+class HlsFileHandler(FmRequestHandler):
+
+    @authenticated(readonly=True)
+    async def get(self, num):
+        try:
+            index = int(num)
+            manager = self.get_context()._hls_manager
+
+            data = manager.get_data(index)
+            if not data:
+                self.send_status(404, "Chunk not found.")
+                return
+
+            self.set_header(
+                'Content-Type',
+                encoder.get_mime_type_for_format(manager._fmt))
+
+            self.write(data.getvalue())
+        except Exception:
+            logger.exception("FILE ERR")
+            self.send_status(404, "Chunk not found.")
 
 
 def get_static_file_location():

@@ -372,11 +372,15 @@ class HLSManager(object):
         self._stop_requested = asyncio.Event()
 
     @property
+    def secs_per_chunk(self):
+        return self._secs_per_chunk
+
+    @property
     def start_index(self):
         return self._start_index
 
     def get_data(self, index):
-        return self._file_mapping.get(index)
+        return self._file_index.get(index)
 
     async def start(self):
         remaining_data = bytearray()
