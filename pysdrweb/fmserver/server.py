@@ -11,7 +11,8 @@ from pysdrweb.util.auth import parse_auth_manager_from_options
 from pysdrweb.util.ioloop import IOLoopContext
 from pysdrweb.util.logger import get_child_logger
 from pysdrweb.fmserver.driver import RtlFmExecDriver
-from pysdrweb.fmserver.handlers import FmServerContext
+from pysdrweb.fmserver.context import FmServerContext
+from pysdrweb.fmserver.handlers import generate_app
 
 
 logger = get_child_logger('fmserver')
@@ -115,7 +116,7 @@ def fm_server_command(port, frequency, rtl, unix, verbose, config):
     context = FmServerContext(
         driver, auth_manager, option_dict.get('default_frequency'))
 
-    app = context.generate_app()
+    app = generate_app(context)
     server = IOLoopContext()
     server.ioloop.add_callback(context.start)
     server.create_http_server(app, ports)

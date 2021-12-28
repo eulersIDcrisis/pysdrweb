@@ -108,11 +108,11 @@ async def encode_from_driver(driver, file_obj, fmt, timeout,
     fmt = fmt.upper()
     # Check the format and decide what to do.
     if fmt in set(['WAV', 'AIFF', 'AIFC']):
-        await _process_using_native_library(
+        return await _process_using_native_library(
             driver, file_obj, fmt, timeout,
             async_flush=async_flush, start_address=start_address)
     elif fmt in SOUNDFILE_FORMATS:
-        await _process_using_soundfile(
+        return await _process_using_soundfile(
             driver, file_obj, fmt, timeout,
             async_flush=async_flush, start_address=start_address)
     else:
@@ -219,7 +219,7 @@ async def _process_using_soundfile(
     """
     try:
         writer = soundfile.SoundFile(
-            file_obj, mode='w', format=fmt.upper(),
+            file_obj, mode='wb', format=fmt.upper(),
             samplerate=driver.framerate, channels=driver.nchannels)
     except Exception:
         raise UnsupportedFormatError('Unsupported format: {}'.format(fmt))

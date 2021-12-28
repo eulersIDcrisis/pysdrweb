@@ -40,7 +40,7 @@ class AbstractRtlDriver(object):
         self._buffer_queues = dict()
         self._next_qid = 1
         self._stop_requested = asyncio.Event()
-
+        # PCM Metadata
         self._nchannels = nchannels
         self._framerate = framerate
         self._sample_width = sample_width
@@ -74,6 +74,11 @@ class AbstractRtlDriver(object):
     def frequency(self):
         """Return the current frequency this driver is configured for."""
         return self._frequency
+
+    @property
+    def stop_event(self):
+        """Return an Event when this driver stops."""
+        return self._stop_requested
 
     def is_running(self):
         """Return whether this is actually running or not."""
@@ -334,73 +339,13 @@ class RtlFmExecDriver(AbstractRtlDriver):
 
 
 #
-# HLS Streaming Utilties
+# More Drivers
 #
-class HLSManager(object):
-    """Manager that encodes an incoming (PCM) stream into an HLS format."""
+class LocalFileDriver(AbstractRtlDriver):
+    """Driver that reads local files and generates PCM data from them."""
 
-    def __init__(self, driver, count=3, secs_per_chunk=5, fmt=None,
-                 start_index=1):
-        """Create the HLSManager that writes audio files for HLS streaming.
+    def __init__(self):
+        super(LocalFileDriver, self).__init__()
 
-        HLS Streaming involves taking a continuous stream of media, then
-        splitting it into smaller 'static' file chunks so that it can be
-        served more efficiently.
-
-        This manager handles the creation (and deletion) of these files as
-        well as various metadata to manage this so that the appropriate data
-        can be served by the backend to support this flow. This stream should
-        not otherwise interfere with the existing PCM driver any more than any
-        other consumer of the PCM data stream.
-
-        The different options configure the format of the static files to be
-        generated, along with the number and duration of these files.
-        """
-        if fmt is None:
-            # Use FLAC by default (if supported), since this should be
-            # supported by most clients. Fallback to WAV, which also should be
-            # supported, if we cannot encode to FLAC.
-            fmt = 'FLAC' if 'FLAC' in encoder.SOUNDFILE_FORMATS else 'WAV'
-        self._fmt = fmt
-        self._chunk_count = count
-        self._secs_per_chunk = secs_per_chunk
-        self._start_index = start_index
-        # Store a mapping of: <index> -> buffer
-        self._file_index = OrderedDict()
-        # Store the driver.
-        self._driver = driver
-        self._stop_requested = asyncio.Event()
-
-    @property
-    def secs_per_chunk(self):
-        return self._secs_per_chunk
-
-    @property
-    def start_index(self):
-        return self._start_index
-
-    def get_data(self, index):
-        return self._file_index.get(index)
-
-    async def start(self):
-        remaining_data = bytearray()
-
-        # Iterate over the data, writing out a new file.
-        start_addr = misc.MIN_PCM_ADDRESS
-        while not self._stop_requested.is_set():
-            print("WRITING: ", self._start_index)
-            file_obj = io.BytesIO()
-            start_addr = await encoder.encode_from_driver(
-                self._driver, file_obj, self._fmt, self._secs_per_chunk,
-                start_address=start_addr)
-            self._file_index[self._start_index] = file_obj
-            if len(self._file_index) > self._chunk_count:
-                # Remove the oldest item.
-                index, _ = self._file_index.popitem(last=False)
-                print("REMOVING: ", index)
-
-            print("WROTE: ", self._start_index)
-            self._start_index += 1
-
-    async def stop(self):
-        self._stop_requested.set()
+    async def start(self, frequency):
+        pass
