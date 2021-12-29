@@ -105,7 +105,6 @@ class HLSManager(object):
             start_addr = await encoder.encode_from_driver(
                 self.driver, file_obj, self._fmt, self._secs_per_chunk,
                 start_address=start_addr)
-            logger.debug("START ADDR: %s", start_addr)
             self._file_mapping[self._next_idx] = file_obj
             if len(self._file_mapping) > self._chunk_count:
                 # Remove the oldest item.

@@ -169,7 +169,7 @@ async def _process_using_native_library(
         # Precalculate the frame size:
         framesize = driver.framesize
         async for seq_index, pcm_data in driver.pcm_item_generator(
-                start_seq_index=start_address.seq_index):
+                seq_index=start_address.seq_index):
             # Handle the special case when the start_address matches the
             # current frame; only return the remaining data, not the whole
             # array.
@@ -237,12 +237,15 @@ async def _process_using_soundfile(
         # Precalculate the frame size
         framesize = driver.framesize
         async for seq_index, pcm_data in driver.pcm_item_generator(
-                start_seq_index=start_address.seq_index):
+                seq_index=start_address.seq_index):
             # Handle the special case when the start_address matches the
             # current frame; only return the remaining data, not the whole
             # array.
             if seq_index == start_address.seq_index:
                 pcm_data = pcm_data[start_address.index:]
+                # No data in this chunk.
+                if len(pcm_data) <= 0:
+                    continue
 
             curr_count = len(pcm_data) // framesize
 

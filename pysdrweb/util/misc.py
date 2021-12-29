@@ -10,9 +10,6 @@ from collections import namedtuple
 import pkg_resources
 
 
-_RANGE_HEADER_PREFIX = b'bytes='
-
-
 def get_version():
     """Return the version of pysdrweb."""
     try:

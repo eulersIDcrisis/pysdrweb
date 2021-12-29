@@ -180,7 +180,7 @@ class AbstractRtlDriver(object):
             for queue in self._buffer_queues.values():
                 queue.put_nowait(item)
 
-    async def pcm_item_generator(self, start_seq_index=-1):
+    async def pcm_item_generator(self, seq_index=-1):
         """Generator to iterate over the PCM data received.
 
         This will keep returning PCM data in chunks, along with a timestamp to
@@ -192,8 +192,8 @@ class AbstractRtlDriver(object):
 
         Parameters
         ----------
-        start_address: PCMBufferAddress or None
-            The start address to iterate from. 'None' implies the very start.
+        seq_index: int or None
+            The 'seq_index' to start iterating from. 'None' implies the very start.
 
         Yields
         ------
@@ -217,7 +217,7 @@ class AbstractRtlDriver(object):
             # Preload the queue with all of the data currently in the deque.
             for item in self._buffer:
                 # Skip any data before the requested start address.
-                if start_seq_index < item.seq_index:
+                if seq_index < item.seq_index:
                     iter_queue.put_nowait(item)
 
             # Add this buffer to receive new data from the handler as it is
