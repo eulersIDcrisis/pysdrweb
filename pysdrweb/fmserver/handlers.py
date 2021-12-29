@@ -13,54 +13,8 @@ from functools import wraps
 from tornado import ioloop, iostream, httpserver, netutil, web
 from pysdrweb.util.logger import logger
 from pysdrweb.util.auth import authenticated
-from pysdrweb.fmserver import encoder
-
-
-class FmServerContext(object):
-
-    def __init__(self, driver, auth_manager, default_frequency=None):
-        self._driver = driver
-        self._auth_manager = auth_manager
-        if default_frequency:
-            self._default_frequency = default_frequency
-        else:
-            # Pick some random frequency. This should be passed, usually.
-            self._default_frequency = '107.3M'
-
-    @property
-    def driver(self):
-        """Return the driver for this context."""
-        return self._driver
-
-    @property
-    def auth_manager(self):
-        """Return the AuthManager for this context."""
-        return self._auth_manager
-
-    async def start(self):
-        # Start the driver.
-        logger.info('Starting on frequency: %s', self._default_frequency)
-        await self.driver.start(self._default_frequency)
-
-    async def stop(self):
-        self.driver.stop()
-        await self.driver.wait()
-
-    def generate_app(self, include_static_files=True):
-        # Now that the process is started, setup the server.
-        routes = [
-            (r'/api/radio/audio(\.[a-zA-Z0-9]+)?',
-                ProcessAudioHandler, dict(context=self)),
-            (r'/api/frequency', FrequencyHandler, dict(context=self)),
-            (r'/api/procinfo', ContextInfoHandler, dict(context=self)),
-        ]
-        if include_static_files:
-            routes.extend([
-                (r'/', web.RedirectHandler, dict(url='/static/index.html')),
-                (r'/static/(.*)', web.StaticFileHandler, dict(
-                    path=get_static_file_location()))
-            ])
-        return web.Application(routes)
+from pysdrweb.fmserver import encoder, hls_streaming
+from pysdrweb.fmserver.context import FmServerContext
 
 
 class FmRequestHandler(web.RequestHandler):
@@ -106,10 +60,10 @@ class FrequencyHandler(FmRequestHandler):
             return
 
         try:
-            driver = self.get_driver()
-            await driver.change_frequency(new_freq)
+            context = self.get_context()
+            await context.change_frequency(new_freq)
             # Redirect back to the main page to refresh it, but stall so the
-            # driver has a chance to start up.
+            # context has a chance to start up.
             await asyncio.sleep(2.0)
             self.redirect('/')
         except Exception:
@@ -143,6 +97,8 @@ class ProcessAudioHandler(FmRequestHandler):
             connection is broken.
      - download: If passed, this sets the 'Content-Disposition' header
             so that the file can be treated as a download by the browser.
+            The query parameter can include the 'name' of the file, if
+            desired, but the extension will be enforced.
     """
 
     @authenticated(readonly=True)
@@ -157,6 +113,27 @@ class ProcessAudioHandler(FmRequestHandler):
         except Exception:
             self.send_status(400, 'Bad format!')
             return
+
+        try:
+            download_name = self.get_argument('download', None)
+            # NOTE: 'download_name' could be the empty string, in which case
+            # the caller wants the default filename.
+            if download_name is not None:
+                # download_name is empty.
+                if not download_name:
+                    download_name = 'audio.{}'.format(ext.lower())
+                elif not download_name.upper().endswith(ext):
+                    # If the file ends with the proper extension, we are good.
+                    download_name = '{}.{}'.format(
+                        download_name, ext.lower())
+                # Use the resulting download_name to set the header
+                self.set_header(
+                    'Content-Disposition',
+                    'attachment; filename={}'.format(download_name))
+        except Exception as exc:
+            # Ignore any exceptions here, since this only affects the
+            # download characteristic of the file.
+            logger.warning('Error parsing "download" parameter: %s', exc)
 
         driver = self.get_driver()
         if not driver.is_running():
@@ -200,3 +177,27 @@ def get_static_file_location():
     return os.path.realpath(os.path.join(
         os.path.dirname(__file__), 'static'
     ))
+
+
+#
+# Generate the Application
+#
+def generate_app(context, include_static_files=True):
+    # Now that the process is started, setup the server.
+    routes = [
+        (r'/api/radio/audio(\.[a-zA-Z0-9]+)?',
+            ProcessAudioHandler, dict(context=context)),
+        (r'/api/frequency', FrequencyHandler, dict(context=context)),
+        (r'/api/procinfo', ContextInfoHandler, dict(context=context)),
+    ]
+    if context.hls_manager:
+        routes.extend(hls_streaming.get_hls_routes(
+            context, prefix='/api/stream'
+        ))
+    if include_static_files:
+        routes.extend([
+            (r'/', web.RedirectHandler, dict(url='/static/index.html')),
+            (r'/static/(.*)', web.StaticFileHandler, dict(
+                path=get_static_file_location()))
+        ])
+    return web.Application(routes)

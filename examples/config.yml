@@ -8,7 +8,7 @@ port: 9000
 # Valid auth types: 'basic' and 'none' (omitting the 'auth' field is the same
 # as an 'auth' field of 'none'.
 #
-# Uncomment to require auth to change the frequency.
+# Uncomment to require authentication for different requests:
 # auth:
 #   type: basic
 #   # This indicates whether 'readonly' (GET) requests require auth or not.
@@ -22,6 +22,29 @@ default_frequency: 107.3M
 # Driver settings.
 driver:
   type: native
-  rtl_fm: /usr/local/bin/rtl_fm
+  # When unspecified, the current path will be searched. Set the path to
+  # the executable explicitly here:
+  # rtl_fm: /usr/local/bin/rtl_fm
   # Optional.
   kb_buffer_size: 128
+
+# HLS Streaming Options
+#
+# Uncomment below to enable HLS with various options. HLS is a protocol
+# that handles streams of media by splitting it into 'chunks', and serving
+# those chunks as static files. The client will piece these chunks together
+# into a continuous stream; the chunks are advertised to the client as an
+# "HLS Playlist", a special file (with .m3u8 extension) that points to each
+# chunk.
+#
+# NOTE: HLS is currently needed to support Safari/iOS browsers.
+#
+# Uncomment to enable HLS:
+hls:
+  enabled: true
+  # Number of chunks (distinct audio files) to store.
+  chunk_count: 6
+  # The length of each individual chunk.
+  seconds_per_chunk: 10
+  # The format of the chunk. If unspecified, this will be a sensible default.
+  # format: flac

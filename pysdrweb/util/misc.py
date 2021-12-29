@@ -5,6 +5,7 @@ Miscellaneous Helpers.
 import os
 import shlex
 import subprocess
+from collections import namedtuple
 # Import to extract the version information.
 import pkg_resources
 
@@ -45,8 +46,44 @@ async def close_pipe_on_exit(proc, fd):
 
 
 def find_executable(cmd):
+    """Find the given executable from the current environment.
+
+    NOTE: This effectively runs: `which ${cmd}` and uses the resulting
+    path (if any).
+    """
     cmd = shlex.join(['which', shlex.quote(cmd)])
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
     if proc.stdout:
         return proc.stdout.decode('utf-8').strip()
     return None
+
+
+#
+# PCM Buffer Utility Classes
+#
+PCMBufferItem = namedtuple('PCMBufferItem', ['seq_index', 'data'])
+"""Tuple that stores a "PCM" chunk and the index it pertains to.
+
+The elements of the tuple are:
+ - 'index': Some monotonically increasing value that flags where in the
+        stream this particular chunk belongs.
+ - 'data': The buffer of data
+"""
+
+
+PCMBufferAddress = namedtuple('PCMBufferAddress', ['seq_index', 'index'])
+"""Tuple that stores an address for a "PCM" chunk.
+
+This tuple addresses a byte position for some sequence of 'PCMBufferItem'
+objects as defined above, with the following pieces:
+ - 'seq_index': Index in the sequence of PCMBufferItems. This addresses
+        which PCMBufferItem to reference.
+ - 'index': Index inside the PCMBufferItem. This addresses the specific
+        byte inside the buffer of an individual PCMBufferItem.
+
+As a namedtuple, this inherits the appropriate comparisions automatically.
+"""
+
+
+MIN_PCM_ADDRESS = PCMBufferAddress(-1, -1)
+"""PCMBufferAddress less than any other."""
