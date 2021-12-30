@@ -84,8 +84,12 @@ def fm_server_command(port, frequency, rtl, unix, verbose, config):
     context = parse_option_dict(option_dict)
     app = generate_app(context)
     server = IOLoopContext()
+    # Setup the server to run when started.
     server.ioloop.add_callback(context.start)
     server.create_http_server(app, ports)
+    # Register the context to stop when the server stops.
+    server.add_drain_hook(context.stop)
+
     port_msg = ', '.join(['{}'.format(p) for p in ports])
     logger.info("Running server on ports: %s", port_msg)
     server.run()
