@@ -5,7 +5,7 @@ Installing pysdrweb.
 from setuptools import setup
 
 
-VERSION = '0.2.1'
+VERSION = '0.3.0'
 
 
 # NOTE: The 'version' is set via setup.cfg.
@@ -23,6 +23,8 @@ setup(
         # 'native' python sound formats are uncompressed and quite
         # large.
         'SoundFile>=0.10.0',
+        # Lameenc is a python module for LAME, the MP3 encoder.
+        'lameenc>=1.3.0',
     ],
     setup_requires=['flake8'],
     entry_points={
