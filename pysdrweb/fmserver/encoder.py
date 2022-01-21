@@ -2,6 +2,7 @@
 
 Utilities for encoding PCM data into various formats asynchronously.
 """
+import time
 import math
 import asyncio
 # Stdlib Soundfile Imports
@@ -23,6 +24,16 @@ except ImportError:
     _SOUNDFILE_IMPORTED = False
     SOUNDFILE_FORMATS = set()
 
+# Try the lameenc import. If it fails, set a flag, but don't fail;
+# the driver will then not support MP3, but other formats should still
+# work.
+try:
+    import lameenc
+
+    MP3_IMPORTED = True
+except ImportError:
+    MP3_IMPORTED = False
+
 # Local Imports
 from pysdrweb.util import misc
 
@@ -33,6 +44,7 @@ _FORMAT_REGISTRY = {
     'AIFC': 'audio/aiff',
     'FLAC': 'audio/flac',
     'OGG': 'audio/ogg',
+    'MP3': 'audio/mp3',
 }
 
 
@@ -107,7 +119,7 @@ async def encode_from_driver(driver, file_obj, fmt, timeout,
 
     fmt = fmt.upper()
     # Check the format and decide what to do.
-    if fmt == 'MP3':
+    if MP3_IMPORTED and fmt == 'MP3':
         return await _process_mp3(
             driver, file_obj, timeout, async_flush=async_flush,
             start_address=start_address)
@@ -231,7 +243,8 @@ async def _process_using_soundfile(
     if timeout is not None and timeout > 0:
         frame_count = int(math.ceil(driver.framerate * timeout))
     else:
-        frame_count = None
+        # Some arbitrarily large number, mapping to 1000 minutes.
+        frame_count = driver.framerate * 60 * 1000
 
     if start_address is None:
         start_address = misc.MIN_PCM_ADDRESS
@@ -292,6 +305,8 @@ async def _process_mp3(driver, file_obj, timeout, quality=5,
 
     if timeout is not None and timeout > 0:
         frame_count = int(math.ceil(driver.framerate * timeout))
+    else:
+        frame_count = None
 
     if start_address is None:
         start_address = misc.MIN_PCM_ADDRESS
@@ -301,11 +316,14 @@ async def _process_mp3(driver, file_obj, timeout, quality=5,
     encoder = lameenc.Encoder()
     encoder.set_bit_rate(128)
     encoder.set_in_sample_rate(driver.framerate)
-    encoder.set_channels(driver.sample_width)
+    encoder.set_channels(driver.nchannels)
     encoder.set_quality(quality)  # 2-highest, 7-fastest
 
     # Precalculate the frame size
     framesize = driver.framesize
+
+    # Store the time too and only flush the MP3 buffer every 0.5 seconds.
+    curr_ts = time.time()
     async for seq_index, pcm_data in driver.pcm_item_generator(
             seq_index=start_address.seq_index):
         # Handle the special case when the start_address matches the
@@ -330,10 +348,9 @@ async def _process_mp3(driver, file_obj, timeout, quality=5,
             # end of this buffer.
             idx = frame_count * framesize
 
-            mp3_data = encoder.encode(interleaved_pcm_data)
-            writer.write(mp3_data)
+            mp3_data = encoder.encode(pcm_data)
             mp3_data = encoder.flush()
-            writer.write(mp3_data)
+            file_obj.write(bytes(mp3_data))
 
             # Remember that if we are still on the starting seq_index,
             # the full address needs to be adjusted appropriately.
@@ -344,12 +361,14 @@ async def _process_mp3(driver, file_obj, timeout, quality=5,
 
         # Otherwise, just write out the full contents of this block, and
         # decrement the number of frames remaining.
-        mp3_data = encoder.encode(interleaved_pcm_data)
-        writer.write(mp3_data)
+        mp3_data = encoder.encode(pcm_data)
+        file_obj.write(bytes(mp3_data))
 
         if frame_count is not None:
             frame_count -= curr_count
 
-        # Call any 'flush' handler if requested.
         if async_flush:
-            await async_flush()
+            new_ts = time.time()
+            if new_ts > curr_ts + 1:
+                curr_ts = new_ts
+                await async_flush()
