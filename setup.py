@@ -23,9 +23,11 @@ setup(
         # 'native' python sound formats are uncompressed and quite
         # large.
         'SoundFile>=0.10.0',
-        # Lameenc is a python module for LAME, the MP3 encoder.
-        'lameenc>=1.3.0',
     ],
+    extras_require={
+        # Lameenc is a python module for LAME, the MP3 encoder.
+        'mp3': ['lameenc>=1.3.0']
+    },
     setup_requires=['flake8'],
     entry_points={
         'console_scripts': [
