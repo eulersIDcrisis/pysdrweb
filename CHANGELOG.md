@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.3.0
+
 Added optional MP3 support; can now use:
 ```
 pip install pysdrweb[mp3]
