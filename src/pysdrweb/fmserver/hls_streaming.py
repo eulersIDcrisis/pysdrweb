@@ -39,10 +39,16 @@ class HLSManager(object):
         generated, along with the number and duration of these files.
         """
         if fmt is None:
+            # Use MP3 first if it is available.
+            if encoder.MP3_IMPORTED:
+                fmt = 'MP3'
             # Use FLAC by default (if supported), since this should be
             # supported by most clients. Fallback to WAV, which also should be
             # supported, if we cannot encode to FLAC.
-            fmt = 'FLAC' if 'FLAC' in encoder.SOUNDFILE_FORMATS else 'WAV'
+            elif 'FLAC' in encoder.SOUNDFILE_FORMATS:
+                fmt = 'FLAC'
+            else:
+                fmt = 'WAV'
         self._fmt = fmt
         self._chunk_count = count
         if self._chunk_count < 6:
