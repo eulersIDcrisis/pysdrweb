@@ -13,6 +13,7 @@ from functools import wraps
 from tornado import ioloop, iostream, httpserver, netutil, web
 from pysdrweb.util.logger import logger
 from pysdrweb.util.auth import authenticated
+from pysdrweb.data import get_data_file_stream
 from pysdrweb.fmserver import encoder, hls_streaming
 from pysdrweb.fmserver.context import FmServerContext
 
@@ -172,6 +173,18 @@ class ProcessAudioHandler(FmRequestHandler):
             self.send_status(500, 'Internal Server Error')
 
 
+class IndexFileHandler(web.RequestHandler):
+
+    def get(self):
+        try:
+            content = get_data_file_stream('static/index.html')
+            self.set_header('Content-Type', 'text/html')
+            self.write(content.read())
+        except Exception:
+            logger.exception('Content not found!')
+            self.set_status(500)
+
+
 def get_static_file_location():
     """Return the static files relative to this directory."""
     return os.path.realpath(os.path.join(
@@ -197,7 +210,10 @@ def generate_app(context, include_static_files=True):
     if include_static_files:
         routes.extend([
             (r'/', web.RedirectHandler, dict(url='/static/index.html')),
-            (r'/static/(.*)', web.StaticFileHandler, dict(
-                path=get_static_file_location()))
+            # TODO -- Create a more generic 'StaticFileHandler' that serves
+            # content from pkg_resources or similar.
+            (r'/static/index.html', IndexFileHandler),
+            # (r'/static/(.*)', web.StaticFileHandler, dict(
+            #     path=get_static_file_location()))
         ])
     return web.Application(routes)
