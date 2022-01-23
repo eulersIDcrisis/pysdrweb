@@ -177,7 +177,7 @@ class IndexFileHandler(web.RequestHandler):
 
     def get(self):
         try:
-            content = get_data_file_stream('static/index.html')
+            content = get_data_file_stream('index.html')
             self.set_header('Content-Type', 'text/html')
             self.write(content.read())
         except Exception:
