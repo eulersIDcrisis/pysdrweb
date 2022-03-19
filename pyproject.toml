@@ -18,6 +18,9 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio",
     "Topic :: Multimedia :: Sound/Audio :: Players"
 ]
+include = [
+    "pysdrweb/data/index.html"
+]
 
 
 [tool.poetry.urls]
