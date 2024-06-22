@@ -7,15 +7,24 @@ import shlex
 import subprocess
 from collections import namedtuple
 # Import to extract the version information.
-import pkg_resources
+try:
+    from importlib.metadata import version
 
+    def get_version():
+        """Return the version of pysdrweb."""
+        try:
+            return version('wheel')
+        except Exception:
+            return 'local'
+except ImportError:
+    import pkg_resources
 
-def get_version():
-    """Return the version of pysdrweb."""
-    try:
-        return pkg_resources.get_distribution('pysdrweb').version
-    except Exception:
-        return 'local'
+    def get_version():
+        """Return the version of pysdrweb."""
+        try:
+            return pkg_resources.get_distribution('pysdrweb').version
+        except Exception:
+            return 'local'
 
 
 async def read_lines_from_stream(read_stream, callback, encoding='utf-8'):
