@@ -2,26 +2,31 @@
 
 Drivers for the FMServerContext
 """
-import io
+
 import shlex
 import asyncio
 import subprocess
-from collections import deque, OrderedDict
+from collections import deque
 
 # Local imports.
 from pysdrweb.util.logger import get_child_logger
 from pysdrweb.util import misc
-from pysdrweb.fmserver import encoder
 
 
-logger = get_child_logger('fmdriver')
+logger = get_child_logger("fmdriver")
 
 
 class AbstractRtlDriver(object):
     """Abstract driver that provides PCM data asynchronously."""
 
-    def __init__(self, nchannels=1, framerate=44100, sample_width=2,
-                 max_chunk_count=None, seq_index=0):
+    def __init__(
+        self,
+        nchannels=1,
+        framerate=44100,
+        sample_width=2,
+        max_chunk_count=None,
+        seq_index=0,
+    ):
         """Create the RtlDriver.
 
         'max_chunk_count' configures the maximum number of chunks to store,
@@ -29,7 +34,7 @@ class AbstractRtlDriver(object):
         """
         self._processes = []
         self._futures = []
-        self._frequency = '107.3M'
+        self._frequency = "107.3M"
         self._log = deque()
 
         # Data buffer and indexing.
@@ -89,7 +94,7 @@ class AbstractRtlDriver(object):
 
     def get_log(self):
         """Return the (stderr) log from any subprocesses."""
-        return ''.join(self._log)
+        return "".join(self._log)
 
     def add_log_line(self, line):
         """Add the given line to the log (as parsed from a subprocess)."""
@@ -272,27 +277,30 @@ class RtlFmExecDriver(AbstractRtlDriver):
 
     @classmethod
     def from_config(cls, config):
-        rtlfm = config.get('rtl_fm')
+        rtlfm = config.get("rtl_fm")
         if not rtlfm:
-            rtlfm = misc.find_executable('rtl_fm')
+            rtlfm = misc.find_executable("rtl_fm")
             if not rtlfm:
                 raise Exception("Could not find path to: rtl_fm")
-            config['rtl_fm'] = rtlfm
+            config["rtl_fm"] = rtlfm
         return cls(config)
 
     def __init__(self, config):
         # TODO -- Probably should not assume this path, but it works for now.
-        self._rtlfm_exec_path = config['rtl_fm']
-        framerate = config.get('framerate', 48000)
+        self._rtlfm_exec_path = config["rtl_fm"]
+        framerate = config.get("framerate", 48000)
 
         # Extract the buffer size.
-        kb_buffer_size = int(config.get('kb_buffer_size', 128))
+        kb_buffer_size = int(config.get("kb_buffer_size", 128))
         super(RtlFmExecDriver, self).__init__(
             # RTL-FM dumps its output into one channel, each sample 2 bytes
             # long. The frame-rate/sample-rate is somewhat configurable,
             # however.
-            nchannels=1, sample_width=2, framerate=framerate,
-            max_chunk_count=kb_buffer_size)
+            nchannels=1,
+            sample_width=2,
+            framerate=framerate,
+            max_chunk_count=kb_buffer_size,
+        )
 
     async def _read_kb_chunks_into_buffer(self, stm):
         while not stm.at_eof():
@@ -310,32 +318,41 @@ class RtlFmExecDriver(AbstractRtlDriver):
         rtl_cmd = [
             shlex.quote(self._rtlfm_exec_path),
             # Configure the frequency here.
-            '-f', shlex.quote('{}'.format(frequency)),
-            '-s', '200k', '-r', shlex.quote('{}'.format(self.framerate)),
-            '-A', 'fast', '-'
+            "-f",
+            shlex.quote("{}".format(frequency)),
+            "-s",
+            "200k",
+            "-r",
+            shlex.quote("{}".format(self.framerate)),
+            "-A",
+            "fast",
+            "-",
         ]
         rtl_proc = await asyncio.create_subprocess_exec(
             *rtl_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         self.add_process_handle(rtl_proc)
         # Read stderr into the log.
-        self.add_awaitable(asyncio.create_task(misc.read_lines_from_stream(
-            rtl_proc.stderr, self.add_log_line)))
+        self.add_awaitable(
+            asyncio.create_task(
+                misc.read_lines_from_stream(rtl_proc.stderr, self.add_log_line)
+            )
+        )
         # Read stdout into the buffer.
-        self.add_awaitable(asyncio.create_task(
-            self._read_kb_chunks_into_buffer(rtl_proc.stdout)
-        ))
+        self.add_awaitable(
+            asyncio.create_task(self._read_kb_chunks_into_buffer(rtl_proc.stdout))
+        )
+
         # Add an awaitable that will set the stop event once the process
         # is stopped.
         async def stop_on_exit():
             await rtl_proc.wait()
             self._stop_requested.set()
+
         self.add_awaitable(asyncio.create_task(stop_on_exit()))
         # Add an awaitable that will stall until the queues are consumed
         # before fully shutting down.
-        self.add_awaitable(asyncio.create_task(
-            self._wait_to_join_queues()
-        ))
+        self.add_awaitable(asyncio.create_task(self._wait_to_join_queues()))
 
 
 #

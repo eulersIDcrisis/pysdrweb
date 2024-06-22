@@ -34,7 +34,8 @@ click = "~8.0"
 soundfile = ">=0.10,<1.0"
 lameenc = ">=1.3.1"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
+black = "^24.0.0"
 
 [tool.poetry.scripts]
 pysdrweb_server = 'pysdrweb.fmserver.server:fm_server_command'

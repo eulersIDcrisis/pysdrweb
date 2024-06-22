@@ -2,6 +2,7 @@
 
 Module to help with loading (static) resources bundled with pysdrweb.
 """
+
 import importlib.resources as internal
 
 

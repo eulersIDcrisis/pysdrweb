@@ -2,10 +2,12 @@
 
 Miscellaneous Helpers.
 """
+
 import os
 import shlex
 import subprocess
 from collections import namedtuple
+
 # Import to extract the version information.
 try:
     from importlib.metadata import version
@@ -13,21 +15,22 @@ try:
     def get_version():
         """Return the version of pysdrweb."""
         try:
-            return version('wheel')
+            return version("wheel")
         except Exception:
-            return 'local'
+            return "local"
+
 except ImportError:
     import pkg_resources
 
     def get_version():
         """Return the version of pysdrweb."""
         try:
-            return pkg_resources.get_distribution('pysdrweb').version
+            return pkg_resources.get_distribution("pysdrweb").version
         except Exception:
-            return 'local'
+            return "local"
 
 
-async def read_lines_from_stream(read_stream, callback, encoding='utf-8'):
+async def read_lines_from_stream(read_stream, callback, encoding="utf-8"):
     """Parse the given stream, and invoke 'callback' for each line parsed.
 
     This continues parsing from the stream until the stream is closed and
@@ -60,17 +63,17 @@ def find_executable(cmd):
     NOTE: This effectively runs: `which ${cmd}` and uses the resulting
     path (if any).
     """
-    cmd = shlex.join(['which', shlex.quote(cmd)])
+    cmd = shlex.join(["which", shlex.quote(cmd)])
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
     if proc.stdout:
-        return proc.stdout.decode('utf-8').strip()
+        return proc.stdout.decode("utf-8").strip()
     return None
 
 
 #
 # PCM Buffer Utility Classes
 #
-PCMBufferItem = namedtuple('PCMBufferItem', ['seq_index', 'data'])
+PCMBufferItem = namedtuple("PCMBufferItem", ["seq_index", "data"])
 """Tuple that stores a "PCM" chunk and the index it pertains to.
 
 The elements of the tuple are:
@@ -80,7 +83,7 @@ The elements of the tuple are:
 """
 
 
-PCMBufferAddress = namedtuple('PCMBufferAddress', ['seq_index', 'index'])
+PCMBufferAddress = namedtuple("PCMBufferAddress", ["seq_index", "index"])
 """Tuple that stores an address for a "PCM" chunk.
 
 This tuple addresses a byte position for some sequence of 'PCMBufferItem'
