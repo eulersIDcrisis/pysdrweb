@@ -2,27 +2,33 @@
 
 Module with objects to handle HLS streaming.
 """
+
 import io
 import asyncio
-from contextlib import nullcontext
 from collections import OrderedDict
+
 # Third-party imports.
 from tornado import web
+
 # Local imports.
 from pysdrweb.util import misc
 from pysdrweb.util.auth import authenticated
 from pysdrweb.util.logger import get_child_logger
-from pysdrweb.fmserver import encoder
+from pysdrweb.encoders import (
+    get_encoder_for_format_type,
+    get_mime_type_for_format,
+    IS_FLAC_AVAILABLE,
+    IS_MP3_AVAILABLE,
+)
 
 
-logger = get_child_logger('hls')
+logger = get_child_logger("hls")
 
 
 class HLSManager(object):
     """Manager that encodes an incoming (PCM) stream into an HLS format."""
 
-    def __init__(self, driver, count=3, secs_per_chunk=10, fmt=None,
-                 start_index=1):
+    def __init__(self, driver, count=3, secs_per_chunk=10, fmt=None, start_index=1):
         """Create the HLSManager that writes audio files for HLS streaming.
 
         HLS Streaming involves taking a continuous stream of media, then
@@ -40,15 +46,15 @@ class HLSManager(object):
         """
         if fmt is None:
             # Use MP3 first if it is available.
-            if encoder.MP3_IMPORTED:
-                fmt = 'MP3'
+            if IS_MP3_AVAILABLE:
+                fmt = "MP3"
             # Use FLAC by default (if supported), since this should be
             # supported by most clients. Fallback to WAV, which also should be
             # supported, if we cannot encode to FLAC.
-            elif 'FLAC' in encoder.SOUNDFILE_FORMATS:
-                fmt = 'FLAC'
+            elif IS_FLAC_AVAILABLE:
+                fmt = "FLAC"
             else:
-                fmt = 'WAV'
+                fmt = "WAV"
         self._fmt = fmt
         self._chunk_count = count
         if self._chunk_count < 6:
@@ -56,7 +62,8 @@ class HLSManager(object):
             # recommended by Apple and others.
             logger.warning(
                 "HLS should have more than 6 chunks. Configured with: %s ",
-                self._chunk_count)
+                self._chunk_count,
+            )
         self._secs_per_chunk = secs_per_chunk
         self._next_idx = start_index
         # Store a mapping of: <index> -> buffer or path
@@ -79,7 +86,7 @@ class HLSManager(object):
     @property
     def mime_type(self):
         """Return the MIME type for the streaming audio file chunks."""
-        return encoder.get_mime_type_for_format(self._fmt)
+        return get_mime_type_for_format(self._fmt)
 
     @property
     def ext(self):
@@ -89,10 +96,10 @@ class HLSManager(object):
     def is_running(self):
         return not self._done_event.is_set()
 
-    def get_available_chunks(self, basename='audio'):
+    def get_available_chunks(self, basename="audio"):
         """Return a list of the available chunks."""
         return [
-            '{}{}.{}'.format(basename, key, self.ext)
+            "{}{}.{}".format(basename, key, self.ext)
             for key in self._file_mapping.keys()
         ]
 
@@ -108,9 +115,13 @@ class HLSManager(object):
         start_addr = misc.MIN_PCM_ADDRESS
         while not self.driver.stop_event.is_set():
             file_obj = io.BytesIO()
-            start_addr = await encoder.encode_from_driver(
-                self.driver, file_obj, self._fmt, self._secs_per_chunk,
-                start_address=start_addr)
+            encoder = get_encoder_for_format_type(self.driver, self._fmt)
+            start_addr = await encoder.encode(
+                file_obj,
+                self._fmt,
+                timeout=self._secs_per_chunk,
+                start_address=start_addr,
+            )
             self._file_mapping[self._next_idx] = file_obj
             if len(self._file_mapping) > self._chunk_count:
                 # Remove the oldest item.
@@ -158,16 +169,12 @@ class HlsPlaylistHandler(HlsRequestHandler):
         try:
             manager = self.get_context()._hls_manager
 
-            self.set_header('Content-Type', 'application/x-mpegurl')
+            self.set_header("Content-Type", "application/x-mpegurl")
             # Disable caching for this handler?
-            self.set_header('Cache-Control', 'no-cache')
+            self.set_header("Cache-Control", "no-cache")
 
             # Write out the file content for the HLS playlist file.
-            self.write(
-                "#EXTM3U\n"
-                "#EXT-X-TARGETDURATION:10\n"
-                "#EXT-X-VERSION:3\n"
-            )
+            self.write("#EXTM3U\n" "#EXT-X-TARGETDURATION:10\n" "#EXT-X-VERSION:3\n")
             secs = manager.secs_per_chunk
             first_written = False
             # Write out all of the files.
@@ -179,7 +186,7 @@ class HlsPlaylistHandler(HlsRequestHandler):
                 self.write("audio{}.{}\n".format(idx, manager.ext))
         except Exception:
             logger.exception("Error generating HLS Playlist (m3u8) file!")
-            self.send_status(500, 'Internal Server Error')
+            self.send_status(500, "Internal Server Error")
             return
 
 
@@ -187,7 +194,6 @@ class HlsFileHandler(HlsRequestHandler):
 
     @authenticated(readonly=True)
     async def get(self, num, ext):
-        print(num, ext)
         try:
             index = int(num)
             manager = self.get_context()._hls_manager
@@ -198,17 +204,19 @@ class HlsFileHandler(HlsRequestHandler):
                 return
 
             # Set the header type.
-            self.set_header('Content-Type', manager.mime_type)
+            self.set_header("Content-Type", manager.mime_type)
             self.write(data.getvalue())
         except Exception:
             logger.exception("Error sending chunk at index: %s", num)
             self.send_status(404, "Chunk not found.")
 
 
-def get_hls_routes(context, prefix='/'):
+def get_hls_routes(context, prefix="/"):
     return [
-        (r'{}/audio.m3u8'.format(prefix), HlsPlaylistHandler, dict(
-            context=context)),
-        (r'{}/audio([0-9]+)\.?(\w*)'.format(prefix), HlsFileHandler, dict(
-            context=context))
+        (r"{}/audio.m3u8".format(prefix), HlsPlaylistHandler, dict(context=context)),
+        (
+            r"{}/audio([0-9]+)\.?(\w*)".format(prefix),
+            HlsFileHandler,
+            dict(context=context),
+        ),
     ]

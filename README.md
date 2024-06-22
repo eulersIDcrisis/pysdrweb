@@ -21,8 +21,6 @@ implemented.)
 By default, python supports some (usually uncompressed) formats
 out of the box:
  - WAV: Raw format used in CDs and other media.
- - AIFF: Another format used in places. Can potentially
-        support compression.
 
 If `soundfile` is also present (and installed correctly), then
 this can also encode into more formats:

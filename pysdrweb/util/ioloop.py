@@ -2,6 +2,7 @@
 
 Utilities for managing the IOLoop in pysdrweb.
 """
+
 import os
 import signal
 import asyncio
@@ -10,7 +11,7 @@ from tornado import ioloop, httpserver, netutil
 from pysdrweb.util.logger import logger
 
 
-UNIX_PREFIX = 'unix:'
+UNIX_PREFIX = "unix:"
 
 
 def _remove_unix_socket(path):
@@ -72,10 +73,11 @@ class IOLoopContext(object):
                 sockets = netutil.bind_sockets(port)
                 server.add_sockets(sockets)
             elif isinstance(port, str):
-                if not port.startswith('unix:'):
+                if not port.startswith("unix:"):
                     raise ValueError(
-                        "Invalid port (or UNIX socket path): {}".format(port))
-                path = port[len(UNIX_PREFIX):]
+                        "Invalid port (or UNIX socket path): {}".format(port)
+                    )
+                path = port[len(UNIX_PREFIX) :]
                 socket = netutil.bind_unix_socket(path)
                 server.add_socket(socket)
                 self.add_shutdown_hook(_remove_unix_socket, path)
@@ -97,6 +99,7 @@ class IOLoopContext(object):
             # Setup the signal handler.
             def _sighandler(signum, stack_frame):
                 self.stop(from_signal_handler=True)
+
             signal.signal(signal.SIGINT, _sighandler)
             signal.signal(signal.SIGTERM, _sighandler)
 
@@ -112,7 +115,7 @@ class IOLoopContext(object):
             try:
                 hook()
             except Exception:
-                logger.exception('Failed to run shutdown hook!')
+                logger.exception("Failed to run shutdown hook!")
         logger.info("Server should be stopped.")
 
     def stop(self, from_signal_handler=False):
@@ -121,7 +124,7 @@ class IOLoopContext(object):
         NOTE: This is thread-safe and can be called from anywhere. This call
         does NOT wait for the loop to stop.
         """
-        logger.info('Server shutdown requested.')
+        logger.info("Server shutdown requested.")
         if from_signal_handler:
             self._loop.add_callback_from_signal(self._stop)
         else:
@@ -129,17 +132,15 @@ class IOLoopContext(object):
 
     async def _stop(self):
         """Helper to stop the IOLoop by running the drain hooks."""
-        logger.info("Running %d callbacks to drain the server.",
-                    len(self._drain_hooks))
+        logger.info("Running %d callbacks to drain the server.", len(self._drain_hooks))
         # Run the drain hooks in reverse.
         timeout = 5
         for hook in reversed(self._drain_hooks):
             try:
                 await asyncio.wait_for(hook(), timeout)
             except asyncio.TimeoutError:
-                logger.warning('Drain hook timed out after %d seconds.',
-                               timeout)
+                logger.warning("Drain hook timed out after %d seconds.", timeout)
             except Exception:
-                logger.exception('Error running drain hook!')
+                logger.exception("Error running drain hook!")
         # Stop the current loop.
         ioloop.IOLoop.current().stop()
