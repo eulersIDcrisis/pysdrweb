@@ -8,7 +8,7 @@ from collections.abc import Sequence
 import math
 import soundfile
 from pysdrweb.util import misc
-from pysdrweb.fmserver.driver import AbstractRtlDriver
+from pysdrweb.drivers import AbstractRtlDriver
 from pysdrweb.encoders.base import UnsupportedFormatError, BaseEncoder
 
 # NOTE: The available formats that soundfile supports should be at:
