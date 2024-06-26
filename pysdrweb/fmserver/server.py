@@ -65,7 +65,7 @@ logger = get_child_logger("fmserver")
     help=("UNIX socket to listen to the server on."),
 )
 @click.help_option("-h", "--help")
-@click.version_option(get_version())
+@click.version_option(get_version(), "-V", "--version")
 def fm_server_command(port, frequency, rtl, unix, verbose, config):
     """CLI to run the FM server via RTL-FM."""
     level = logging.DEBUG if verbose > 0 else logging.INFO

@@ -33,33 +33,37 @@ this can also encode into more formats:
 browsers, not as many formats. The code should be easy enough
 to add more formats, however, if that is ever really needed.)
 
-Currently, this server appears to work on Firefox and Chrome,
-which support dynamically playing audio as it is downloaded.
-The hope is to support Safari in the future, but this is not
-yet implemented.
+If `lameenc` is also present, then this can also encode into
+still more formats like:
+ - MP3: Enough said.
+
+Currently, this server appears to work on Firefox and Chrome.
+With HLS, Safari should also be supported, though this will
+require the app to stall for a bit to build up the appropriate
+HLS buffering.
 
 ### Goal
 
 The goal of this server is to support multiple formats and
 multiple clients simultaneously, without straining _too_ many
 system resources; the hope is that this server is low-key
-enough to run on weaker hardware.
+enough to run on weaker hardware (yes, even with python).
 
-## Running the Server
+### Running the Server
 
 Currently, the server requires `rtl_fm` to be installed and
 a valid RTL-SDR device to be plugged in.
 
 The simplest way to run the server is:
 ```sh
-sdrfm_server -p 8080 -f 107.3M
+pysdrweb_server -p 8080 -f 107.3M
 ```
 This runs the server on port 8080 and listens (initially) on
 107.3 FM.
 
 If `rtl_fm` is not on the path, that can be passed in with:
 ```sh
-sdrfm_server -p 8080 -f 107.3M -m ${RTL_FM_PATH}
+pysdrweb_server -p 8080 -f 107.3M -m ${RTL_FM_PATH}
 ```
 
 For the full set of options, it is easier to configure the
@@ -88,6 +92,27 @@ driver:
   rtl_fm: /usr/local/bin/rtl_fm
   # Optional.
   kb_buffer_size: 128
+
+# HLS Streaming Options
+#
+# Uncomment below to enable HLS with various options. HLS is a protocol
+# that handles streams of media by splitting it into 'chunks', and serving
+# those chunks as static files. The client will piece these chunks together
+# into a continuous stream; the chunks are advertised to the client as an
+# "HLS Playlist", a special file (with .m3u8 extension) that points to each
+# chunk.
+#
+# NOTE: HLS is currently needed to support Safari/iOS browsers.
+#
+# Uncomment to enable HLS:
+hls:
+  enabled: true
+  # Number of chunks (distinct audio files) to store.
+  chunk_count: 6
+  # The length of each individual chunk.
+  seconds_per_chunk: 10
+  # The format of the chunk. If unspecified, this will be a sensible default.
+  # format: flac
 ```
 Then, to run the server:
 ```sh
@@ -95,7 +120,7 @@ sdrfm_server -c config.yml
 ```
 This permits adding authentication as well.
 
-## Server REST API
+### Server REST API
 
 Currently, the server supports a REST API that the main page
 invokes to render. The main calls are described below:
@@ -174,3 +199,9 @@ To address these issues, pysdrweb will buffer the PCM output
 from whatever source (currently `rtl_fm`) and encode it on
 the fly, which permits _multiple clients and formats_. This
 also permits changing the frequency more easily.
+
+## Future
+
+A few low-hanging fruit features to consider adding:
+ - Scan for available channels.
+ - More sophisticated UI (Theming and Features)

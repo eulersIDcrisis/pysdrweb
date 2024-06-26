@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+HLS Streaming should now work. It should also work with python versions up to
+3.12.
+
 ## 0.3.0
 
 Added optional MP3 support; can now use:
@@ -11,5 +16,4 @@ be subject to GPL so it is bundled as an optional package.
 
 ## 0.2.0
 
-First version (after working out a few bugs with the package server.
-
+First version after working out a few bugs with the package server.
