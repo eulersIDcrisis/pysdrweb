@@ -9,7 +9,7 @@ import asyncio
 from pysdrweb.util.logger import logger
 from pysdrweb.util.auth import parse_auth_manager_from_options
 from pysdrweb.fmserver.hls_streaming import HLSManager
-from pysdrweb.fmserver.driver import RtlFmExecDriver
+from pysdrweb.drivers import RtlFmExecDriver
 
 
 class FmServerContext(object):

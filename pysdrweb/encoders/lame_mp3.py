@@ -9,7 +9,7 @@ from typing import Awaitable, Callable
 import lameenc
 from pysdrweb.util import misc
 from pysdrweb.encoders.base import BaseEncoder
-from pysdrweb.fmserver.driver import AbstractRtlDriver
+from pysdrweb.drivers import AbstractRtlDriver
 
 
 class Mp3Encoder(BaseEncoder):

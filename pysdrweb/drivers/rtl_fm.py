@@ -2,6 +2,7 @@
 
 Driver
 """
+
 import shlex
 import asyncio
 from pysdrweb.util import misc
@@ -96,4 +97,3 @@ class RtlFmExecDriver(AbstractRtlDriver):
         # Add an awaitable that will stall until the queues are consumed
         # before fully shutting down.
         self.add_awaitable(asyncio.create_task(self._wait_to_join_queues()))
-

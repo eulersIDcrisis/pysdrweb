@@ -3,11 +3,6 @@
 Base/Common modules for RTL Driver interactions.
 """
 
-"""driver.py.
-
-Drivers for the FMServerContext
-"""
-
 import asyncio
 from collections import deque
 

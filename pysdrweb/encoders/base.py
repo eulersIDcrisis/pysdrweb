@@ -7,7 +7,7 @@ from typing import Optional, Callable, Awaitable
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from pysdrweb.util.misc import PCMBufferAddress
-from pysdrweb.fmserver.driver import AbstractRtlDriver
+from pysdrweb.drivers import AbstractRtlDriver
 
 
 class UnsupportedFormatError(Exception):
