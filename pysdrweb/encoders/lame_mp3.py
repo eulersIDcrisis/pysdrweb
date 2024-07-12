@@ -52,7 +52,7 @@ async def _process_mp3(
     start_address=None,
 ) -> misc.PCMBufferAddress:
     if quality < 2 or quality > 7:
-        raise ValueError("Invalid MP3 Quality: {}".format(quality))
+        raise ValueError(f"Invalid MP3 Quality: {quality}")
 
     if timeout is not None and timeout > 0:
         frame_count = int(math.ceil(driver.framerate * timeout))

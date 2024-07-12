@@ -73,10 +73,10 @@ def fm_server_command(port, frequency, rtl, unix, verbose, config):
 
     # Parse the configuration file first.
     if config:
-        with open(config, "r") as stm:
+        with open(config, "r", encoding="utf-8") as stm:
             option_dict = yaml.safe_load(stm)
     else:
-        option_dict = dict()
+        option_dict = {}
 
     # Port settings.
     if port and port[0]:
@@ -94,7 +94,7 @@ def fm_server_command(port, frequency, rtl, unix, verbose, config):
             curr_ports = [curr_ports]
         elif not isinstance(curr_ports, list):
             curr_ports = list(curr_ports)
-        curr_ports.append("unix:{}".format(unix))
+        curr_ports.append(f"unix:{unix}")
         option_dict["port"] = curr_ports
     # Final, parsed ports
     ports = option_dict["port"]
@@ -117,7 +117,7 @@ def fm_server_command(port, frequency, rtl, unix, verbose, config):
     # Register the context to stop when the server stops.
     server.add_drain_hook(context.stop)
 
-    port_msg = ", ".join(["{}".format(p) for p in ports])
+    port_msg = ", ".join([f"{p}" for p in ports])
     logger.info("Running server on ports: %s", port_msg)
     server.run()
 

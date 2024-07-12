@@ -3,6 +3,7 @@
 Implementation of the 'FmServerContext' and associated helpers.
 """
 
+from typing import Optional
 import asyncio
 
 # Local Imports
@@ -12,7 +13,7 @@ from pysdrweb.fmserver.hls_streaming import HLSManager
 from pysdrweb.drivers import RtlFmExecDriver
 
 
-class FmServerContext(object):
+class FmServerContext:
     """Context for the FM Server.
 
     This class stores various pieces for the server, all in one place. In
@@ -23,7 +24,13 @@ class FmServerContext(object):
      - Default/starting frequency
     """
 
-    def __init__(self, driver, auth_manager, hls_manager=None, default_frequency=None):
+    def __init__(
+        self,
+        driver,
+        auth_manager,
+        hls_manager: Optional[HLSManager] = None,
+        default_frequency=None,
+    ):
         self._driver = driver
         self._auth_manager = auth_manager
         if default_frequency:
@@ -45,7 +52,7 @@ class FmServerContext(object):
         return self._auth_manager
 
     @property
-    def hls_manager(self):
+    def hls_manager(self) -> Optional[HLSManager]:
         """Return the HLSManager for this context (if applicable).
 
         If HLS is not configured, this returns None.
@@ -88,7 +95,7 @@ def parse_option_dict(option_dict):
     driver = RtlFmExecDriver.from_config(option_dict.get("driver", {}))
 
     # Parse HLS options.
-    hls_option_dict = option_dict.get("hls", dict())
+    hls_option_dict = option_dict.get("hls", {})
     if hls_option_dict and hls_option_dict.get("enabled", False):
         # Parse the applicable fields.
         chunk_count = hls_option_dict.get("chunk_count", 6)
