@@ -24,11 +24,8 @@ class SoundfileEncoder(BaseEncoder):
     """Encoder that uses the ``soundfile`` module."""
 
     @classmethod
-    def get_supported_formats(self) -> Sequence[str]:
+    def get_supported_formats(cls) -> Sequence[str]:
         return _FORMAT_TYPES
-
-    def __init__(self, driver: AbstractRtlDriver) -> None:
-        super().__init__(driver)
 
     async def encode(
         self,
@@ -65,8 +62,8 @@ async def _process_using_soundfile(
             samplerate=driver.framerate,
             channels=driver.nchannels,
         )
-    except Exception:
-        raise UnsupportedFormatError(f"Unsupported format: {fmt}")
+    except Exception as exc:
+        raise UnsupportedFormatError(f"Unsupported format: {fmt}") from exc
 
     if timeout is not None and timeout > 0:
         frame_count = int(math.ceil(driver.framerate * timeout))

@@ -15,26 +15,26 @@ _ENCODER_REGISTRY: dict[str, BaseEncoder] = {}
 
 
 # Native library should always be okay.
-for format_type in StandardLibraryEncoder.get_supported_formats():
-    _ENCODER_REGISTRY[format_type] = StandardLibraryEncoder
+for fmt_type in StandardLibraryEncoder.get_supported_formats():
+    _ENCODER_REGISTRY[fmt_type] = StandardLibraryEncoder
 
 try:
     from pysdrweb.encoders.lame_mp3 import Mp3Encoder
 
     # Add the Mp3Encoder.
-    for format_type in Mp3Encoder.get_supported_formats():
-        _ENCODER_REGISTRY[format_type] = Mp3Encoder
+    for fmt_type in Mp3Encoder.get_supported_formats():
+        _ENCODER_REGISTRY[fmt_type] = Mp3Encoder
 except ImportError:
-    raise
+    pass
 
 try:
     from pysdrweb.encoders.soundfile_util import SoundfileEncoder
 
-    for format_type in SoundfileEncoder.get_supported_formats():
-        _ENCODER_REGISTRY[format_type] = SoundfileEncoder
+    for fmt_type in SoundfileEncoder.get_supported_formats():
+        _ENCODER_REGISTRY[fmt_type] = SoundfileEncoder
 
 except ImportError:
-    raise
+    pass
 
 
 _FORMAT_REGISTRY = {

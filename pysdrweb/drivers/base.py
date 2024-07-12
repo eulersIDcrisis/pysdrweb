@@ -3,6 +3,7 @@
 Base/Common modules for RTL Driver interactions.
 """
 
+import abc
 import asyncio
 from collections import deque
 
@@ -10,7 +11,7 @@ from collections import deque
 from pysdrweb.util import misc
 
 
-class AbstractRtlDriver(object):
+class AbstractRtlDriver(abc.ABC):
     """Abstract driver that provides PCM data asynchronously."""
 
     def __init__(
@@ -107,6 +108,7 @@ class AbstractRtlDriver(object):
         """
         self._futures.append(fut)
 
+    @abc.abstractmethod
     async def start(self, frequency):
         raise NotImplementedError()
 

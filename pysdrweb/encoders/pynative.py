@@ -77,9 +77,6 @@ except ImportError:
 class StandardLibraryEncoder(BaseEncoder):
     _supported_formats = frozenset(_FORMAT_FILE_REGISTRY.keys())
 
-    def __init__(self, driver):
-        super().__init__(driver)
-
     @classmethod
     def get_supported_formats(cls) -> Sequence[str]:
         return cls._supported_formats

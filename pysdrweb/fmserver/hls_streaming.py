@@ -171,7 +171,7 @@ class HlsPlaylistHandler(HlsRequestHandler):
             self.set_header("Cache-Control", "no-cache")
 
             # Write out the file content for the HLS playlist file.
-            self.write("#EXTM3U\n" "#EXT-X-TARGETDURATION:10\n" "#EXT-X-VERSION:3\n")
+            self.write("#EXTM3U\n#EXT-X-TARGETDURATION:10\n#EXT-X-VERSION:3\n")
             secs = manager.secs_per_chunk
             first_written = False
             # Write out all of the files.

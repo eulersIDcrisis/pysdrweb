@@ -21,8 +21,8 @@ class Mp3Encoder(BaseEncoder):
         self.quality = quality
 
     @classmethod
-    def get_supported_formats(self) -> tuple[str]:
-        return Mp3Encoder._supported_formats
+    def get_supported_formats(cls) -> tuple[str]:
+        return cls._supported_formats
 
     async def encode(
         self,

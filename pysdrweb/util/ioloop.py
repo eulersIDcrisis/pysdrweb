@@ -21,7 +21,7 @@ def _remove_unix_socket(path):
         pass
 
 
-class IOLoopContext(object):
+class IOLoopContext:
     """Primary context that manages an IOLoop.
 
     This class permits creating servers and running the applicable IOLoop.

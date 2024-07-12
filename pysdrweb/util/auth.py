@@ -144,14 +144,14 @@ def authenticated(readonly=True):
             except MissingBasicAuth:
                 handler.set_header("WWW-Authenticate", 'Basic realm="FM SDR Server"')
                 handler.send_status(401, "Missing authentication!")
-                return
+                return None
             except NotAuthorized:
                 handler.send_status(403, "Authentication failed!")
-                return
+                return None
             except Exception:
                 auth_logger.exception("Unexpected error processing auth!")
                 handler.send_status(500, "Internal Server Error")
-                return
+                return None
 
             # Authentication succeeded. Call the main function.
             return func(handler, *args, **kwargs)
