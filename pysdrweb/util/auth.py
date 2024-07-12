@@ -24,7 +24,7 @@ class MissingBasicAuth(NotAuthorized):
     """
 
 
-class BaseAuthManager(object):
+class BaseAuthManager:
     """Base class for authentication.
 
     For convenience, this can also be used as a manager to deny every

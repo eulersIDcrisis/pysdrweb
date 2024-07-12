@@ -36,7 +36,7 @@ class AbstractRtlDriver(object):
         self._seq_index = seq_index
         # Buffer queues and related keys.
         self._buffer_cond = asyncio.Condition()
-        self._buffer_queues = dict()
+        self._buffer_queues = {}
         self._next_qid = 1
         self._stop_requested = asyncio.Event()
         # PCM Metadata
@@ -149,7 +149,7 @@ class AbstractRtlDriver(object):
         self._log.clear()
         # Reset the stop events and the async queue
         self._stop_requested.clear()
-        self._buffer_queues = dict()
+        self._buffer_queues = {}
 
     async def change_frequency(self, frequency):
         """Change the frequency this driver listens on.

@@ -153,7 +153,7 @@ class HlsRequestHandler(web.RequestHandler):
     def send_status(self, code, message):
         """Helper to send a JSON message for the given status."""
         self.set_status(code)
-        self.write(dict(status=code, message=message))
+        self.write({"status": code, "message": message})
 
 
 class HlsPlaylistHandler(HlsRequestHandler):
@@ -213,7 +213,7 @@ def get_hls_routes(context, prefix="/"):
     return [
         (f"{prefix}/audio.m3u8", HlsPlaylistHandler, context_args),
         (
-            rf"{prefix}/audio([0-9]+)\.?(\w*)",
+            rf"{prefix}/audio(?P<num>[0-9]+)\.?(?P<ext>\w*)",
             HlsFileHandler,
             context_args,
         ),

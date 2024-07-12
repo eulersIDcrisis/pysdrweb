@@ -82,6 +82,7 @@ class FmRequestHandler(web.RequestHandler):
 
 
 class FrequencyHandler(FmRequestHandler):
+    """Handler to fetch and change the frequency for the driver."""
 
     @authenticated(readonly=True)
     async def get(self):

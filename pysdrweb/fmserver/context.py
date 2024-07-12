@@ -70,6 +70,7 @@ class FmServerContext:
             self.driver.add_awaitable(fut)
 
     async def stop(self):
+        """Stop the driver and wait for it to cleanup."""
         self.driver.stop()
         await self.driver.wait()
 
