@@ -3,8 +3,8 @@
 Encoders using python's 'soundfile' library.
 """
 
-from typing import Awaitable, Callable
-from collections.abc import Sequence
+from typing import BinaryIO, Optional
+from collections.abc import Sequence, Awaitable, Callable
 import math
 import soundfile
 from pysdrweb.util import misc
@@ -29,10 +29,10 @@ class SoundfileEncoder(BaseEncoder):
 
     async def encode(
         self,
-        stream,
+        stream: BinaryIO,
         format_type: str,
-        timeout: float | None = None,
-        async_flush: Callable[[], Awaitable[None]] = None,
+        timeout: Optional[float] = None,
+        async_flush: Optional[Callable[[], Awaitable[None]]] = None,
         start_address=None,
     ):
         return await _process_using_soundfile(
