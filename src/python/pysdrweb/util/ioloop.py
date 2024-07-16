@@ -21,7 +21,7 @@ def _remove_unix_socket(path):
         pass
 
 
-class IOLoopContext(object):
+class IOLoopContext:
     """Primary context that manages an IOLoop.
 
     This class permits creating servers and running the applicable IOLoop.
@@ -74,15 +74,13 @@ class IOLoopContext(object):
                 server.add_sockets(sockets)
             elif isinstance(port, str):
                 if not port.startswith("unix:"):
-                    raise ValueError(
-                        "Invalid port (or UNIX socket path): {}".format(port)
-                    )
+                    raise ValueError(f"Invalid port (or UNIX socket path): {port}")
                 path = port[len(UNIX_PREFIX) :]
                 socket = netutil.bind_unix_socket(path)
                 server.add_socket(socket)
                 self.add_shutdown_hook(_remove_unix_socket, path)
             else:
-                raise TypeError("Invalid port: {}".format(port))
+                raise TypeError(f"Invalid port: {port}")
 
         async def _drain_connections():
             """Helper that registers the server to drain connections."""

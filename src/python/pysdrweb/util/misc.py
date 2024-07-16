@@ -64,7 +64,7 @@ def find_executable(cmd):
     path (if any).
     """
     cmd = shlex.join(["which", shlex.quote(cmd)])
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True, check=False)
     if proc.stdout:
         return proc.stdout.decode("utf-8").strip()
     return None

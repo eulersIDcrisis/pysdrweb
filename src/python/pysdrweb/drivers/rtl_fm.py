@@ -36,7 +36,7 @@ class RtlFmExecDriver(AbstractRtlDriver):
 
         # Extract the buffer size.
         kb_buffer_size = int(config.get("kb_buffer_size", 128))
-        super(RtlFmExecDriver, self).__init__(
+        super().__init__(
             # RTL-FM dumps its output into one channel, each sample 2 bytes
             # long. The frame-rate/sample-rate is somewhat configurable,
             # however.
@@ -63,11 +63,11 @@ class RtlFmExecDriver(AbstractRtlDriver):
             shlex.quote(self._rtlfm_exec_path),
             # Configure the frequency here.
             "-f",
-            shlex.quote("{}".format(frequency)),
+            shlex.quote(f"{frequency}"),
             "-s",
             "200k",
             "-r",
-            shlex.quote("{}".format(self.framerate)),
+            shlex.quote(f"{self.framerate}"),
             "-A",
             "fast",
             "-",

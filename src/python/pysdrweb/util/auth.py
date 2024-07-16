@@ -24,7 +24,7 @@ class MissingBasicAuth(NotAuthorized):
     """
 
 
-class BaseAuthManager(object):
+class BaseAuthManager:
     """Base class for authentication.
 
     For convenience, this can also be used as a manager to deny every
@@ -73,7 +73,7 @@ class BasicAuthManager(BaseAuthManager):
         if isinstance(user_password_mapping, dict):
             self.user_password_mapping = user_password_mapping
         else:
-            self.user_password_mapping = dict()
+            self.user_password_mapping = {}
 
     def authenticate(self, req_handler):
         """Authenticate this request by checking for the 'Basic' header."""
@@ -93,20 +93,20 @@ class BasicAuthManager(BaseAuthManager):
 
             expected_password = self.user_password_mapping.get(user)
             if expected_password is None or expected_password != password:
-                raise MissingBasicAuth("Invalid password for user: {}".format(user))
+                raise MissingBasicAuth(f"Invalid password for user: {user}")
             return user
         except NotAuthorized:
             # Exception message is already okay to raise. Also will raise
             # MissingBasicAuth implicitly as well.
             raise
-        except Exception:
-            raise NotAuthorized()
+        except Exception as exc:
+            raise NotAuthorized() from exc
 
 
 def parse_auth_manager_from_options(options_dict):
     """Parse out an AuthManager from the given options."""
     try:
-        auth_dict = options_dict.get("auth", dict(type="null"))
+        auth_dict = options_dict.get("auth", {"type": "null"})
         auth_type = auth_dict.get("type", "null").lower()
         ignore_on_read = auth_dict.get("ignore_on_read", True)
         if auth_type in ["none", "null"]:
@@ -115,13 +115,13 @@ def parse_auth_manager_from_options(options_dict):
         if auth_type == "basic":
             # Parse the options to create the BasicAuthManager.
             user_mapping = {}
-            for user, password in auth_dict.get("users", dict()).items():
+            for user, password in auth_dict.get("users", {}).items():
                 if not isinstance(user, str) or not isinstance(password, str):
                     raise ValueError("Usernames and passwords MUST be strings!")
                 user_mapping[user] = password
             return BasicAuthManager(user_mapping, ignore_on_read)
 
-        raise Exception("Invalid auth_type given: {}".format(auth_type))
+        raise Exception(f"Invalid auth_type given: {auth_type}")
     except Exception as exc:
         raise ParseError(str(exc)) from exc
 
@@ -144,14 +144,14 @@ def authenticated(readonly=True):
             except MissingBasicAuth:
                 handler.set_header("WWW-Authenticate", 'Basic realm="FM SDR Server"')
                 handler.send_status(401, "Missing authentication!")
-                return
+                return None
             except NotAuthorized:
                 handler.send_status(403, "Authentication failed!")
-                return
+                return None
             except Exception:
                 auth_logger.exception("Unexpected error processing auth!")
                 handler.send_status(500, "Internal Server Error")
-                return
+                return None
 
             # Authentication succeeded. Call the main function.
             return func(handler, *args, **kwargs)

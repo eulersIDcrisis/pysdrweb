@@ -3,8 +3,8 @@
 Encoders using python's 'soundfile' library.
 """
 
-from typing import Awaitable, Callable
-from collections.abc import Sequence
+from typing import BinaryIO, Optional
+from collections.abc import Sequence, Awaitable, Callable
 import math
 import soundfile
 from pysdrweb.util import misc
@@ -24,18 +24,15 @@ class SoundfileEncoder(BaseEncoder):
     """Encoder that uses the ``soundfile`` module."""
 
     @classmethod
-    def get_supported_formats(self) -> Sequence[str]:
+    def get_supported_formats(cls) -> Sequence[str]:
         return _FORMAT_TYPES
-
-    def __init__(self, driver: AbstractRtlDriver) -> None:
-        super().__init__(driver)
 
     async def encode(
         self,
-        stream,
+        stream: BinaryIO,
         format_type: str,
-        timeout: float | None = None,
-        async_flush: Callable[[], Awaitable[None]] = None,
+        timeout: Optional[float] = None,
+        async_flush: Optional[Callable[[], Awaitable[None]]] = None,
         start_address=None,
     ):
         return await _process_using_soundfile(
@@ -65,8 +62,8 @@ async def _process_using_soundfile(
             samplerate=driver.framerate,
             channels=driver.nchannels,
         )
-    except Exception:
-        raise UnsupportedFormatError(f"Unsupported format: {fmt}")
+    except Exception as exc:
+        raise UnsupportedFormatError(f"Unsupported format: {fmt}") from exc
 
     if timeout is not None and timeout > 0:
         frame_count = int(math.ceil(driver.framerate * timeout))

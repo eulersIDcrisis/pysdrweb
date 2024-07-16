@@ -27,7 +27,7 @@ class BaseEncoder(ABC):
 
     @classmethod
     @abstractmethod
-    def get_supported_formats(self) -> Sequence[str]:
+    def get_supported_formats(cls) -> Sequence[str]:
         """Return the formats supported by this encoder."""
 
     @abstractmethod

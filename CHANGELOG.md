@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+Restructuring code and adding typing annotations.
+
 ## 0.4.0
 
 HLS Streaming should now work. It should also work with python versions up to

@@ -25,7 +25,7 @@ from pysdrweb.encoders import (
 logger = get_child_logger("hls")
 
 
-class HLSManager(object):
+class HLSManager:
     """Manager that encodes an incoming (PCM) stream into an HLS format."""
 
     def __init__(self, driver, count=3, secs_per_chunk=10, fmt=None, start_index=1):
@@ -98,10 +98,7 @@ class HLSManager(object):
 
     def get_available_chunks(self, basename="audio"):
         """Return a list of the available chunks."""
-        return [
-            "{}{}.{}".format(basename, key, self.ext)
-            for key in self._file_mapping.keys()
-        ]
+        return [f"{basename}{key}.{self.ext}" for key in self._file_mapping.keys()]
 
     def get_data(self, index):
         return self._file_mapping.get(index)
@@ -156,7 +153,7 @@ class HlsRequestHandler(web.RequestHandler):
     def send_status(self, code, message):
         """Helper to send a JSON message for the given status."""
         self.set_status(code)
-        self.write(dict(status=code, message=message))
+        self.write({"status": code, "message": message})
 
 
 class HlsPlaylistHandler(HlsRequestHandler):
@@ -174,16 +171,16 @@ class HlsPlaylistHandler(HlsRequestHandler):
             self.set_header("Cache-Control", "no-cache")
 
             # Write out the file content for the HLS playlist file.
-            self.write("#EXTM3U\n" "#EXT-X-TARGETDURATION:10\n" "#EXT-X-VERSION:3\n")
+            self.write("#EXTM3U\n#EXT-X-TARGETDURATION:10\n#EXT-X-VERSION:3\n")
             secs = manager.secs_per_chunk
             first_written = False
             # Write out all of the files.
             for idx in manager._file_mapping.keys():
                 if not first_written:
-                    self.write("#EXT-MEDIA-SEQUENCE:{}\n".format(idx))
+                    self.write(f"#EXT-MEDIA-SEQUENCE:{idx}\n")
                     first_written = True
-                self.write("#EXTINF:{:.2f},\n".format(secs))
-                self.write("audio{}.{}\n".format(idx, manager.ext))
+                self.write(f"#EXTINF:{secs:.2f},\n")
+                self.write(f"audio{idx}.{manager.ext}\n")
         except Exception:
             logger.exception("Error generating HLS Playlist (m3u8) file!")
             self.send_status(500, "Internal Server Error")
@@ -212,11 +209,12 @@ class HlsFileHandler(HlsRequestHandler):
 
 
 def get_hls_routes(context, prefix="/"):
+    context_args = {"context": context}
     return [
-        (r"{}/audio.m3u8".format(prefix), HlsPlaylistHandler, dict(context=context)),
+        (f"{prefix}/audio.m3u8", HlsPlaylistHandler, context_args),
         (
-            r"{}/audio([0-9]+)\.?(\w*)".format(prefix),
+            rf"{prefix}/audio(?P<num>[0-9]+)\.?(?P<ext>\w*)",
             HlsFileHandler,
-            dict(context=context),
+            context_args,
         ),
     ]
