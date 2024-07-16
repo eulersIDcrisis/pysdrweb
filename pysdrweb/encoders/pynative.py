@@ -4,10 +4,10 @@
 standard library).
 """
 
-from typing import Optional, Awaitable, Callable
+from collections.abc import Sequence, Awaitable, Callable
+from typing import Optional, Any, BinaryIO
 import math
 from contextlib import ExitStack
-from collections.abc import Sequence
 
 # Still in the python standard library.
 import wave
@@ -21,7 +21,7 @@ from pysdrweb.encoders.base import BaseEncoder, UnsupportedFormatError
 def _open_wave_file(file_obj, driver, frame_count):
     with ExitStack() as exit_stack:
         writer = wave.open(file_obj, "wb")
-        writer.callback(writer.close)
+        exit_stack.callback(writer.close)
         writer.setnchannels(driver.nchannels)
         writer.setsampwidth(driver.sample_width)
         writer.setframerate(driver.framerate)
@@ -33,7 +33,9 @@ def _open_wave_file(file_obj, driver, frame_count):
     return writer
 
 
-_FORMAT_FILE_REGISTRY = {"WAV": _open_wave_file}
+_FORMAT_FILE_REGISTRY: dict[str, Callable[[BinaryIO, Any, int]]] = {
+    "WAV": _open_wave_file
+}
 try:
     import aifc
 
@@ -46,20 +48,21 @@ try:
             writer.setframerate(driver.framerate)
             writer.setnframes(frame_count)
             writer.setcomptype(b"NONE", b"No compression.")
-        # No errors, so return the driver without closing it.
-        exit_stack.pop_all()
+            # No errors, so return the driver without closing it.
+            exit_stack.pop_all()
         return writer
 
     def _open_aifc_file(file_obj, driver, frame_count):
         with ExitStack() as exit_stack:
             writer = aifc.open(file_obj, "wb")
+            exit_stack.callback(writer.close)
             writer.setnchannels(driver.nchannels)
             writer.setsampwidth(driver.sample_width)
             writer.setframerate(driver.framerate)
             writer.setnframes(frame_count)
             writer.setcomptype(b"G722", b"G.722 Compression.")
-        # No errors, so return the driver without closing it.
-        exit_stack.pop_all()
+            # No errors, so return the driver without closing it.
+            exit_stack.pop_all()
         return writer
 
     _FORMAT_FILE_REGISTRY["AIFF"] = _open_aiff_file
