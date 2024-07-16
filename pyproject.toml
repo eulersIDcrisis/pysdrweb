@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pysdrweb"
-version = "0.4.0"
+version = "0.4.1"
 description = "Server to host FM Radio via RTL-SDR utilities."
 authors = ["Aaron Gibson <eulersidcrisis@yahoo.com>"]
 license = "MIT License"
@@ -36,7 +36,11 @@ tornado = "^6.1"
 PyYAML = "^6.0"
 click = "~8.0"
 soundfile = ">=0.10,<1.0"
-lameenc = ">=1.3.1"
+lameenc = { version = ">=1.3.1", optional = true }
+
+[tool.poetry.extras]
+mp3 =  [ "lameenc" ]
+
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.0.0"

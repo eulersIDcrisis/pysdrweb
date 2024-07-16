@@ -182,7 +182,7 @@ colors = ["colorama (>=0.4.6)"]
 name = "lameenc"
 version = "1.7.0"
 description = "LAME encoding bindings"
-optional = false
+optional = true
 python-versions = "*"
 files = [
     {file = "lameenc-1.7.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:666dae5544b82b7c7e2d45ee82b0b74a3b5d46c62f79df603a30f4b633c78556"},
@@ -540,7 +540,10 @@ files = [
     {file = "typing_extensions-4.12.2.tar.gz", hash = "sha256:1a7ead55c7e559dd4dee8856e3a88b41225abfe1ce8df57b7c13915fe121ffb8"},
 ]
 
+[extras]
+mp3 = ["lameenc"]
+
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<4"
-content-hash = "304b233347f4df59ffb863054ab7e042e999961b4a09411057219eeef1a2c129"
+content-hash = "b9cdf53149b81446a32b825645bb0fb09b56bc9fd3f42e10a8e43e048a3a46f6"
