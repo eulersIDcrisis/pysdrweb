@@ -21,6 +21,10 @@ classifiers = [
 include = [
     "pysdrweb/data/index.html"
 ]
+packages = [
+    { include = "pysdrweb", from = "src/python" },
+    { include = "pysdrweb_data", from = "src/web" }
+]
 
 
 [tool.poetry.urls]

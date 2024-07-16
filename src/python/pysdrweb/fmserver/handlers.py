@@ -13,13 +13,20 @@ from contextlib import ExitStack
 from tornado import iostream, web
 from pysdrweb.util.logger import logger
 from pysdrweb.util.auth import authenticated
-from pysdrweb.data import get_data_file_stream
 from pysdrweb.encoders import (
     get_encoder_for_format_type,
     get_mime_type_for_format,
     UnsupportedFormatError,
 )
 from pysdrweb.fmserver import hls_streaming
+
+try:
+    # Import the static template files.
+    from pysdrweb_data import get_data_file_stream
+
+    _STATIC_FILES_BUNDLED = True
+except ImportError:
+    _STATIC_FILES_BUNDLED = False
 
 
 class RequestFileHandle:
@@ -221,25 +228,26 @@ class ProcessAudioHandler(FmRequestHandler):
             self.send_status(500, "Internal Server Error")
 
 
-class IndexFileHandler(web.RequestHandler):
-    """Handler that serves static files."""
+if _STATIC_FILES_BUNDLED:
 
-    async def get(self):
-        with ExitStack() as exit_stack:
-            try:
-                content = get_data_file_stream("index.html")
-                exit_stack.callback(content.close)
-                self.set_header("Content-Type", "text/html")
-                self.write(content.read())
-            except Exception:
-                logger.exception("Content not found!")
-                self.set_status(404)
-                self.write({"status": 404, "message": "Content not found!"})
+    class IndexFileHandler(web.RequestHandler):
+        """Handler that serves static files."""
 
+        async def get(self):
+            with ExitStack() as exit_stack:
+                try:
+                    content = get_data_file_stream("index.html")
+                    exit_stack.callback(content.close)
+                    self.set_header("Content-Type", "text/html")
+                    self.write(content.read())
+                except Exception:
+                    logger.exception("Content not found!")
+                    self.set_status(404)
+                    self.write({"status": 404, "message": "Content not found!"})
 
-def get_static_file_location():
-    """Return the static files relative to this directory."""
-    return os.path.realpath(os.path.join(os.path.dirname(__file__), "static"))
+    def get_static_file_location():
+        """Return the static files relative to this directory."""
+        return os.path.realpath(os.path.join(os.path.dirname(__file__), "static"))
 
 
 #
@@ -259,7 +267,7 @@ def generate_app(context, include_static_files=True):
     ]
     if context.hls_manager:
         routes.extend(hls_streaming.get_hls_routes(context, prefix="/api/stream"))
-    if include_static_files:
+    if include_static_files and _STATIC_FILES_BUNDLED:
         routes.extend(
             [
                 (r"/", web.RedirectHandler, {"url": "/static/index.html"}),
