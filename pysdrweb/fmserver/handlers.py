@@ -9,6 +9,7 @@ however; this should be handled elsewhere.
 
 import os
 import asyncio
+from contextlib import ExitStack
 from tornado import iostream, web
 from pysdrweb.util.logger import logger
 from pysdrweb.util.auth import authenticated
@@ -223,14 +224,17 @@ class ProcessAudioHandler(FmRequestHandler):
 class IndexFileHandler(web.RequestHandler):
     """Handler that serves static files."""
 
-    def get(self):
-        try:
-            content = get_data_file_stream("index.html")
-            self.set_header("Content-Type", "text/html")
-            self.write(content.read())
-        except Exception:
-            logger.exception("Content not found!")
-            self.set_status(500)
+    async def get(self):
+        with ExitStack() as exit_stack:
+            try:
+                content = get_data_file_stream("index.html")
+                exit_stack.callback(content.close)
+                self.set_header("Content-Type", "text/html")
+                self.write(content.read())
+            except Exception:
+                logger.exception("Content not found!")
+                self.set_status(404)
+                self.write({"status": 404, "message": "Content not found!"})
 
 
 def get_static_file_location():

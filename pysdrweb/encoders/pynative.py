@@ -33,7 +33,7 @@ def _open_wave_file(file_obj, driver, frame_count):
     return writer
 
 
-_FORMAT_FILE_REGISTRY: dict[str, Callable[[BinaryIO, Any, int]]] = {
+_FORMAT_FILE_REGISTRY: dict[str, Callable[[BinaryIO, Any, int], Any]] = {
     "WAV": _open_wave_file
 }
 try:
