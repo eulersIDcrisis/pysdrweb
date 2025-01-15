@@ -4,11 +4,10 @@ Encoders using python's 'soundfile' library.
 """
 
 from typing import BinaryIO, Optional
-from collections.abc import Sequence, Awaitable, Callable
+from collections.abc import Collection, Awaitable, Callable
 import math
 import soundfile
 from pysdrweb.util import misc
-from pysdrweb.drivers import AbstractRtlDriver
 from pysdrweb.encoders.base import UnsupportedFormatError, BaseEncoder
 
 # NOTE: The available formats that soundfile supports should be at:
@@ -24,7 +23,7 @@ class SoundfileEncoder(BaseEncoder):
     """Encoder that uses the ``soundfile`` module."""
 
     @classmethod
-    def get_supported_formats(cls) -> Sequence[str]:
+    def get_supported_formats(cls) -> Collection[str]:
         return _FORMAT_TYPES
 
     async def encode(
