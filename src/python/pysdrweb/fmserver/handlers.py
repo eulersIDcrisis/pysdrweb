@@ -18,6 +18,7 @@ from pysdrweb.encoders import (
     get_mime_type_for_format,
     UnsupportedFormatError,
 )
+from pysdrweb.drivers import AbstractPCMDriver
 from pysdrweb.fmserver import hls_streaming
 
 try:
@@ -69,13 +70,13 @@ class RequestFileHandle:
 
 
 class FmRequestHandler(web.RequestHandler):
-    """Base handler with common access to the AbstractRtlDriver."""
+    """Base handler with common access to the AbstractPCMDriver."""
 
     def initialize(self, context=None):
         """Initialize the handler with the current context."""
         self._context = context
 
-    def get_driver(self):
+    def get_driver(self) -> AbstractPCMDriver:
         """Get the FM driver for the handler."""
         return self.get_context().driver
 
@@ -83,7 +84,7 @@ class FmRequestHandler(web.RequestHandler):
         """Get the current FMServerContext for the handler."""
         return self._context
 
-    def send_status(self, code, message):
+    def send_status(self, code: int, message: str):
         """Helper to send a JSON message for the given status."""
         self.set_status(code)
         self.write({"status": code, "message": message})

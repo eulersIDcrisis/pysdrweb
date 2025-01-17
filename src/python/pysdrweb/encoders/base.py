@@ -7,7 +7,7 @@ from typing import Optional, Callable, Awaitable
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from pysdrweb.util.misc import PCMBufferAddress
-from pysdrweb.drivers import AbstractRtlDriver
+from pysdrweb.drivers import AbstractPCMDriver
 
 
 class UnsupportedFormatError(Exception):
@@ -17,12 +17,12 @@ class UnsupportedFormatError(Exception):
 class BaseEncoder(ABC):
     """Base encoder class with the different properties"""
 
-    def __init__(self, driver: AbstractRtlDriver) -> None:
+    def __init__(self, driver: AbstractPCMDriver) -> None:
         super().__init__()
         self._driver = driver
 
     @property
-    def driver(self) -> AbstractRtlDriver:
+    def driver(self) -> AbstractPCMDriver:
         return self._driver
 
     @classmethod

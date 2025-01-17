@@ -8,9 +8,9 @@ import asyncio
 
 # Local Imports
 from pysdrweb.util.logger import logger
-from pysdrweb.util.auth import parse_auth_manager_from_options
+from pysdrweb.util.auth import parse_auth_manager_from_options, BaseAuthManager
 from pysdrweb.fmserver.hls_streaming import HLSManager
-from pysdrweb.drivers import RtlFmExecDriver
+from pysdrweb.drivers import RtlFmExecDriver, AbstractPCMDriver
 
 
 class FmServerContext:
@@ -26,8 +26,8 @@ class FmServerContext:
 
     def __init__(
         self,
-        driver,
-        auth_manager,
+        driver: AbstractPCMDriver,
+        auth_manager: BaseAuthManager,
         hls_manager: Optional[HLSManager] = None,
         default_frequency=None,
     ):
@@ -42,12 +42,12 @@ class FmServerContext:
         self._hls_manager = hls_manager
 
     @property
-    def driver(self):
+    def driver(self) -> AbstractPCMDriver:
         """Return the driver for this context."""
         return self._driver
 
     @property
-    def auth_manager(self):
+    def auth_manager(self) -> BaseAuthManager:
         """Return the AuthManager for this context."""
         return self._auth_manager
 
