@@ -6,10 +6,10 @@ Driver
 import shlex
 import asyncio
 from pysdrweb.util import misc
-from pysdrweb.drivers.base import AbstractRtlDriver
+from pysdrweb.drivers.base import AbstractPCMDriver
 
 
-class RtlFmExecDriver(AbstractRtlDriver):
+class RtlFmExecDriver(AbstractPCMDriver):
     """Driver that runs rtl_fm directly, then encodes the data on request.
 
     This driver basically runs:

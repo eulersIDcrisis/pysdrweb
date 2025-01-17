@@ -11,7 +11,7 @@ from collections import deque
 from pysdrweb.util import misc
 
 
-class AbstractRtlDriver(abc.ABC):
+class AbstractPCMDriver(abc.ABC):
     """Abstract driver that provides PCM data asynchronously."""
 
     def __init__(
@@ -22,7 +22,7 @@ class AbstractRtlDriver(abc.ABC):
         max_chunk_count=None,
         seq_index=0,
     ):
-        """Create the RtlDriver.
+        """Create the PCM driver using the passed metadata.
 
         'max_chunk_count' configures the maximum number of chunks to store,
         as each chunk would be added by "add_chunk()".

@@ -1,27 +1,30 @@
-"""ioloop.py.
+"""event_loop_util.py.
 
 Utilities for managing the IOLoop in pysdrweb.
 """
+
+from typing import Union
+from collections.abc import Callable
 
 import os
 import signal
 import asyncio
 from functools import partial
-from tornado import ioloop, httpserver, netutil
+from tornado import httpserver, netutil, web
 from pysdrweb.util.logger import logger
 
 
 UNIX_PREFIX = "unix:"
 
 
-def _remove_unix_socket(path):
+def _remove_unix_socket(path: str):
     try:
         os.remove(path)
     except OSError:
         pass
 
 
-class IOLoopContext:
+class EventLoopContext:
     """Primary context that manages an IOLoop.
 
     This class permits creating servers and running the applicable IOLoop.
@@ -35,14 +38,20 @@ class IOLoopContext:
         self._drain_hooks = []
 
         # Store the IOLoop here for reference when shutting down.
-        self._loop = ioloop.IOLoop.current()
+        self._loop = asyncio.new_event_loop()
+        self._initialized = False
 
     @property
-    def ioloop(self):
+    def event_loop(self) -> asyncio.AbstractEventLoop:
         """Return the IOLoop this context manages."""
         return self._loop
 
-    def add_shutdown_hook(self, fn, *args, **kwargs):
+    async def initialize(self):
+        if self._initialized:
+            raise RuntimeError("initialize() already called.")
+        self._initialized = True
+
+    def add_shutdown_hook(self, fn: Callable, *args, **kwargs):
         """Register the given callback to run during shutdown.
 
         NOTE: These callbacks are executed in the reverse order they are added,
@@ -61,7 +70,7 @@ class IOLoopContext:
             raise TypeError("Given 'async_fn' is not a coroutine!")
         self._drain_hooks.append(async_fn)
 
-    def create_http_server(self, app, ports):
+    def create_http_server(self, app: web.Application, ports: list[Union[str, int]]):
         """Create an HTTPServer instance that listens on the given ports.
 
         NOTE: If a string is passed for a UNIX socket, it should be prefixed
@@ -91,22 +100,32 @@ class IOLoopContext:
 
         return server
 
-    def run(self, register_sighandler=True):
+    def run(self, register_sighandler: bool = True):
         """Run the IOLoop on the thread this method is called."""
-        if register_sighandler:
-            # Setup the signal handler.
-            def _sighandler(signum, stack_frame):
-                self.stop(from_signal_handler=True)
+        # Install 'self._loop' as the main event loop for this thread.
+        asyncio.set_event_loop(self._loop)
 
-            signal.signal(signal.SIGINT, _sighandler)
-            signal.signal(signal.SIGTERM, _sighandler)
+        if register_sighandler:
+            self._loop.add_signal_handler(signal.SIGINT, self.stop)
+            self.add_shutdown_hook(self._loop.remove_signal_handler, signal.SIGINT)
+            self._loop.add_signal_handler(signal.SIGTERM, self.stop)
+            self.add_shutdown_hook(self._loop.remove_signal_handler, signal.SIGTERM)
 
         try:
+            # Queue the request to initialize the context, if it hasn't been
+            # initialized already.
+            if not self._initialized:
+                self._loop.run_until_complete(self.initialize())
             # Run the loop.
-            self._loop.start()
-            self._loop.close()
+            self._loop.run_forever()
         except Exception:
-            logger.exception("Error in IOLoop!")
+            logger.exception("Error running the event loop!")
+        finally:
+            self._loop.run_until_complete(self._loop.shutdown_asyncgens())
+            self._loop.run_until_complete(self._loop.shutdown_default_executor())
+            # Clear the drain hooks.
+            self._drain_hooks = []
+
         # Run the shutdown hooks.
         logger.info("Running %d shutdown hooks.", len(self._shutdown_hooks))
         for hook in reversed(self._shutdown_hooks):
@@ -114,19 +133,18 @@ class IOLoopContext:
                 hook()
             except Exception:
                 logger.exception("Failed to run shutdown hook!")
-        logger.info("Server should be stopped.")
+        # Clear the shutdown hooks.
+        self._shutdown_hooks = []
+        logger.info("Stopped the server.")
 
-    def stop(self, from_signal_handler=False):
+    def stop(self):
         """Schedule this IOLoopContext to stop.
 
         NOTE: This is thread-safe and can be called from anywhere. This call
         does NOT wait for the loop to stop.
         """
         logger.info("Server shutdown requested.")
-        if from_signal_handler:
-            self._loop.add_callback_from_signal(self._stop)
-        else:
-            self._loop.add_callback(self._stop)
+        asyncio.run_coroutine_threadsafe(self._stop(), self._loop)
 
     async def _stop(self):
         """Helper to stop the IOLoop by running the drain hooks."""
@@ -141,4 +159,4 @@ class IOLoopContext:
             except Exception:
                 logger.exception("Error running drain hook!")
         # Stop the current loop.
-        ioloop.IOLoop.current().stop()
+        self._loop.stop()

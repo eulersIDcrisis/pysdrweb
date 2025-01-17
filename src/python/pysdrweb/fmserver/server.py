@@ -7,13 +7,31 @@ import logging
 import yaml
 import click
 from pysdrweb.util.misc import get_version
-from pysdrweb.util.ioloop import IOLoopContext
+from pysdrweb.util.event_loop_util import EventLoopContext
 from pysdrweb.util.logger import get_child_logger
 from pysdrweb.fmserver.handlers import generate_app
 from pysdrweb.fmserver.context import parse_option_dict
 
 
 logger = get_child_logger("fmserver")
+
+
+class FmServerContext(EventLoopContext):
+
+    def __init__(self, context, ports):
+        super().__init__()
+        self._context = context
+        self._ports = ports
+
+    async def initialize(self):
+        await super().initialize()
+
+        # Run the context.
+        await self._context.start()
+        self.add_drain_hook(self._context.stop)
+
+        app = generate_app(self._context)
+        self.create_http_server(app, self._ports)
 
 
 # Create the base command for use with this server.
@@ -109,13 +127,7 @@ def fm_server_command(port, frequency, rtl, unix, verbose, config):
 
     # Create the context.
     context = parse_option_dict(option_dict)
-    app = generate_app(context)
-    server = IOLoopContext()
-    # Setup the server to run when started.
-    server.ioloop.add_callback(context.start)
-    server.create_http_server(app, ports)
-    # Register the context to stop when the server stops.
-    server.add_drain_hook(context.stop)
+    server = FmServerContext(context, ports)
 
     port_msg = ", ".join([f"{p}" for p in ports])
     logger.info("Running server on ports: %s", port_msg)

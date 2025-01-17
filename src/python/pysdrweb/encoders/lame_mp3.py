@@ -9,14 +9,14 @@ from typing import Awaitable, Callable
 import lameenc
 from pysdrweb.util import misc
 from pysdrweb.encoders.base import BaseEncoder
-from pysdrweb.drivers import AbstractRtlDriver
+from pysdrweb.drivers import AbstractPCMDriver
 
 
 class Mp3Encoder(BaseEncoder):
 
     _supported_formats = ("MP3",)
 
-    def __init__(self, driver: AbstractRtlDriver, quality=7) -> None:
+    def __init__(self, driver: AbstractPCMDriver, quality=7) -> None:
         super().__init__(driver)
         self.quality = quality
 
