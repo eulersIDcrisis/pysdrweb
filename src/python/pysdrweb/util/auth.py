@@ -2,7 +2,6 @@
 
 Authentication utilities for RequestHandlers.
 """
-
 import base64
 from functools import wraps
 from pysdrweb.util.logger import auth_logger
@@ -39,7 +38,7 @@ class BaseAuthManager:
         """Return whether to ignore authentication for 'read' requests."""
         return self._ignore_on_read
 
-    def authenticate(self, token):
+    def authenticate(self, req_handler):
         """Return the user this request is authenticated for.
 
         If not authenticated by this manager, this should raise some form
