@@ -3,6 +3,7 @@
 Module with objects to handle HLS streaming.
 """
 
+from typing import Optional
 import io
 import asyncio
 from collections import OrderedDict
@@ -28,7 +29,14 @@ logger = get_child_logger("hls")
 class HLSManager:
     """Manager that encodes an incoming (PCM) stream into an HLS format."""
 
-    def __init__(self, driver, count=3, secs_per_chunk=10, fmt=None, start_index=1):
+    def __init__(
+        self,
+        driver,
+        count: int = 3,
+        secs_per_chunk: float = 10,
+        fmt: Optional[str] = None,
+        start_index: int = 1,
+    ):
         """Create the HLSManager that writes audio files for HLS streaming.
 
         HLS Streaming involves taking a continuous stream of media, then

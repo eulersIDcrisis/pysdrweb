@@ -2,6 +2,7 @@
 
 Authentication utilities for RequestHandlers.
 """
+
 import base64
 from functools import wraps
 from pysdrweb.util.logger import auth_logger
