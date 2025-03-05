@@ -216,7 +216,7 @@ class HlsFileHandler(HlsRequestHandler):
             self.send_status(404, "Chunk not found.")
 
 
-def get_hls_routes(context, prefix="/"):
+def get_hls_routes(context, prefix=""):
     context_args = {"context": context}
     return [
         (f"{prefix}/audio.m3u8", HlsPlaylistHandler, context_args),
