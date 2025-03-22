@@ -7,6 +7,11 @@ when they fail to import. This permits a more configurable set of encoders to
 use as various libraries are available.
 """
 
+# Import for typing.
+from typing import Optional
+from pysdrweb.drivers import AbstractPCMDriver as _AbstractPCMDriver
+
+# Main Imports
 from pysdrweb.encoders.base import BaseEncoder, UnsupportedFormatError
 from pysdrweb.encoders.pynative import StandardLibraryEncoder
 
@@ -61,7 +66,9 @@ MP3 is explicitly available.
 """
 
 
-def get_encoder_for_format_type(driver, format_type: str, /, **kwds) -> BaseEncoder:
+def get_encoder_for_format_type(
+    driver: _AbstractPCMDriver, format_type: str, /, **kwds
+) -> BaseEncoder:
     """Return the encoder for the given format type."""
     enc = _ENCODER_REGISTRY.get(format_type)
     if enc is None:
@@ -70,6 +77,6 @@ def get_encoder_for_format_type(driver, format_type: str, /, **kwds) -> BaseEnco
     return enc(driver, **kwds)
 
 
-def get_mime_type_for_format(fmt):
+def get_mime_type_for_format(fmt: str) -> Optional[str]:
     """Return the MIME type for the given format."""
     return _FORMAT_REGISTRY.get(fmt.upper(), "application/octet-stream")

@@ -88,7 +88,7 @@ class FmServerContext:
             self.driver.add_awaitable(fut)
 
 
-def parse_option_dict(option_dict):
+def parse_option_dict(option_dict) -> FmServerContext:
     """Parse the given dict of options and return an FMServerContext."""
     auth_manager = parse_auth_manager_from_options(option_dict)
 

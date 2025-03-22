@@ -3,6 +3,11 @@
 Miscellaneous Helpers.
 """
 
+# Typing Imports
+from collections.abc import Callable
+from typing import Any, Optional
+
+# Standard Imports
 import os
 import shlex
 import subprocess
@@ -12,7 +17,7 @@ from collections import namedtuple
 try:
     from importlib.metadata import version
 
-    def get_version():
+    def get_version() -> str:
         """Return the version of pysdrweb."""
         try:
             return version("wheel")
@@ -22,7 +27,7 @@ try:
 except ImportError:
     import pkg_resources
 
-    def get_version():
+    def get_version() -> str:
         """Return the version of pysdrweb."""
         try:
             return pkg_resources.get_distribution("pysdrweb").version
@@ -30,7 +35,14 @@ except ImportError:
             return "local"
 
 
-async def read_lines_from_stream(read_stream, callback, encoding="utf-8"):
+import asyncio
+
+
+async def read_lines_from_stream(
+    read_stream: asyncio.StreamReader,
+    callback: Callable[[bytes], Any],
+    encoding: str = "utf-8",
+):
     """Parse the given stream, and invoke 'callback' for each line parsed.
 
     This continues parsing from the stream until the stream is closed and
@@ -47,7 +59,7 @@ async def read_lines_from_stream(read_stream, callback, encoding="utf-8"):
         callback(data)
 
 
-async def close_pipe_on_exit(proc, fd):
+async def close_pipe_on_exit(proc: asyncio.subprocess.Process, fd: int):
     """Helper that will close the given fd (pipe) when 'proc' finishes.
 
     Useful when chaining processes because sometimes the write side of the
@@ -57,7 +69,7 @@ async def close_pipe_on_exit(proc, fd):
     os.close(fd)
 
 
-def find_executable(cmd):
+def find_executable(cmd: str) -> Optional[str]:
     """Find the given executable from the current environment.
 
     NOTE: This effectively runs: `which ${cmd}` and uses the resulting

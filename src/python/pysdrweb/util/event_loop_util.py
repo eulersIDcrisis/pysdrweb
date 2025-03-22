@@ -3,14 +3,20 @@
 Utilities for managing the IOLoop in pysdrweb.
 """
 
-from typing import Union
-from collections.abc import Callable
+# Typing Imports
+from typing import Union, Any
+from collections.abc import Callable, Awaitable
 
+# Standard Imports
 import os
 import signal
 import asyncio
 from functools import partial
+
+# Third-party Imports
 from tornado import httpserver, netutil, web
+
+# Local Imports
 from pysdrweb.util.logger import logger
 
 
@@ -34,12 +40,12 @@ class EventLoopContext:
     """
 
     def __init__(self):
-        self._shutdown_hooks = []
-        self._drain_hooks = []
+        self._shutdown_hooks: list[Callable[[], Any]] = []
+        self._drain_hooks: list[Callable[[], Union[None, Awaitable]]] = []
 
         # Store the IOLoop here for reference when shutting down.
-        self._loop = asyncio.new_event_loop()
-        self._initialized = False
+        self._loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()
+        self._initialized: bool = False
 
     @property
     def event_loop(self) -> asyncio.AbstractEventLoop:
@@ -61,13 +67,13 @@ class EventLoopContext:
             raise TypeError("Given 'fn' is not callable!")
         self._shutdown_hooks.append(partial(fn, *args, **kwargs))
 
-    def add_drain_hook(self, async_fn):
+    def add_drain_hook(self, async_fn: Callable[[], Union[None, Awaitable]]):
         """Add the given coroutine to run when stopping the server.
 
         NOTE: 'async_fn' must be a coroutine that can be awaited!
         """
-        if not asyncio.iscoroutinefunction(async_fn):
-            raise TypeError("Given 'async_fn' is not a coroutine!")
+        if not callable(async_fn):
+            raise TypeError("Given 'async_fn' is not callable!")
         self._drain_hooks.append(async_fn)
 
     def create_http_server(self, app: web.Application, ports: list[Union[str, int]]):
@@ -147,13 +153,15 @@ class EventLoopContext:
         asyncio.run_coroutine_threadsafe(self._stop(), self._loop)
 
     async def _stop(self):
-        """Helper to stop the IOLoop by running the drain hooks."""
+        """Helper to stop the event loop by running the drain hooks."""
         logger.info("Running %d callbacks to drain the server.", len(self._drain_hooks))
         # Run the drain hooks in reverse.
         timeout = 5
         for hook in reversed(self._drain_hooks):
             try:
-                await asyncio.wait_for(hook(), timeout)
+                res = hook()
+                if asyncio.iscoroutine(res):
+                    await asyncio.wait_for(res, timeout)
             except asyncio.TimeoutError:
                 logger.warning("Drain hook timed out after %d seconds.", timeout)
             except Exception:

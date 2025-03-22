@@ -3,9 +3,10 @@
 Module to handle encoing using the LAME MP3 library.
 """
 
+from collections.abc import Awaitable, Callable
+from typing import BinaryIO
 import math
 import time
-from typing import Awaitable, Callable
 import lameenc
 from pysdrweb.util import misc
 from pysdrweb.encoders.base import BaseEncoder
@@ -26,11 +27,11 @@ class Mp3Encoder(BaseEncoder):
 
     async def encode(
         self,
-        stream,
+        stream: BinaryIO,
         format_type: str,
         timeout: float | None = None,
         async_flush: Callable[[], Awaitable[None]] = None,
-        start_address=None,
+        start_address: misc.PCMBufferAddress | None = None,
     ) -> misc.PCMBufferAddress:
         assert format_type.lower() == "mp3"
         return await _process_mp3(
@@ -44,12 +45,12 @@ class Mp3Encoder(BaseEncoder):
 
 
 async def _process_mp3(
-    driver,
-    file_obj,
+    driver: AbstractPCMDriver,
+    file_obj: BinaryIO,
     timeout: float | None,
     quality: int = 5,
-    async_flush=None,
-    start_address=None,
+    async_flush: Callable[[], Awaitable | None] | None = None,
+    start_address: misc.PCMBufferAddress | None = None,
 ) -> misc.PCMBufferAddress:
     if quality < 2 or quality > 7:
         raise ValueError(f"Invalid MP3 Quality: {quality}")
@@ -63,7 +64,6 @@ async def _process_mp3(
         start_address = misc.MIN_PCM_ADDRESS
 
     # Initialize the encoder.
-    encoder = lameenc.Encoder()
     encoder = lameenc.Encoder()
     encoder.set_bit_rate(128)
     encoder.set_in_sample_rate(driver.framerate)

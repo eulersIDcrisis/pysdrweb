@@ -3,7 +3,7 @@
 Module with objects to handle HLS streaming.
 """
 
-from typing import Optional
+from typing import Optional, BinaryIO
 import io
 import asyncio
 from collections import OrderedDict
@@ -15,7 +15,9 @@ from tornado import web
 from pysdrweb.util import misc
 from pysdrweb.util.auth import authenticated
 from pysdrweb.util.logger import get_child_logger
+from pysdrweb.drivers import AbstractPCMDriver
 from pysdrweb.encoders import (
+    BaseEncoder,
     get_encoder_for_format_type,
     get_mime_type_for_format,
     IS_FLAC_AVAILABLE,
@@ -31,7 +33,7 @@ class HLSManager:
 
     def __init__(
         self,
-        driver,
+        driver: AbstractPCMDriver,
         count: int = 3,
         secs_per_chunk: float = 10,
         fmt: Optional[str] = None,
@@ -75,40 +77,40 @@ class HLSManager:
         self._secs_per_chunk = secs_per_chunk
         self._next_idx = start_index
         # Store a mapping of: <index> -> buffer or path
-        self._file_mapping = OrderedDict()
+        self._file_mapping: dict[int, BinaryIO] = OrderedDict()
         # Store the driver.
         self._driver = driver
         self._stop_requested = asyncio.Event()
         self._done_event = asyncio.Event()
 
     @property
-    def driver(self):
+    def driver(self) -> AbstractPCMDriver:
         """Return the underlying driver for this HLS manager."""
         return self._driver
 
     @property
-    def secs_per_chunk(self):
+    def secs_per_chunk(self) -> float:
         """Return the duration (in seconds) for each audio chunk."""
         return self._secs_per_chunk
 
     @property
-    def mime_type(self):
+    def mime_type(self) -> str:
         """Return the MIME type for the streaming audio file chunks."""
         return get_mime_type_for_format(self._fmt)
 
     @property
-    def ext(self):
+    def ext(self) -> str:
         """Extension type when streaming audio chunks."""
         return self._fmt.lower()
 
-    def is_running(self):
+    def is_running(self) -> bool:
         return not self._done_event.is_set()
 
-    def get_available_chunks(self, basename="audio"):
+    def get_available_chunks(self, basename: str = "audio") -> list[str]:
         """Return a list of the available chunks."""
         return [f"{basename}{key}.{self.ext}" for key in self._file_mapping.keys()]
 
-    def get_data(self, index):
+    def get_data(self, index: int) -> Optional[BinaryIO]:
         return self._file_mapping.get(index)
 
     async def run(self):
@@ -128,7 +130,7 @@ class HLSManager:
                 start_address=start_addr,
             )
             self._file_mapping[self._next_idx] = file_obj
-            if len(self._file_mapping) > self._chunk_count:
+            while len(self._file_mapping) > self._chunk_count:
                 # Remove the oldest item.
                 index, buff = self._file_mapping.popitem(last=False)
                 logger.debug("Removing index: %s", index)
@@ -150,7 +152,7 @@ class HlsRequestHandler(web.RequestHandler):
         """Initialize the handler with the current context."""
         self._context = context
 
-    def get_driver(self):
+    def get_driver(self) -> AbstractPCMDriver:
         """Get the FM driver for the handler."""
         return self.get_context().driver
 

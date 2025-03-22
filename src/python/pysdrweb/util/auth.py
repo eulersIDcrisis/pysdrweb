@@ -3,8 +3,13 @@
 Authentication utilities for RequestHandlers.
 """
 
+# Typing Imports
+from typing import Optional
+
+# Standard Imports
 import base64
 from functools import wraps
+from tornado import web
 from pysdrweb.util.logger import auth_logger
 
 
@@ -31,15 +36,15 @@ class BaseAuthManager:
     request.
     """
 
-    def __init__(self, ignore_on_read=True):
+    def __init__(self, ignore_on_read: bool = True):
         self._ignore_on_read = ignore_on_read
 
     @property
-    def ignore_on_read(self):
+    def ignore_on_read(self) -> bool:
         """Return whether to ignore authentication for 'read' requests."""
         return self._ignore_on_read
 
-    def authenticate(self, req_handler):
+    def authenticate(self, req_handler: web.RequestHandler) -> Optional[str]:
         """Return the user this request is authenticated for.
 
         If not authenticated by this manager, this should raise some form
@@ -57,7 +62,7 @@ class AllAccessAuthManager(BaseAuthManager):
     WARNING: Only use this if you do NOT care about authentication!
     """
 
-    def authenticate(self, req_handler):
+    def authenticate(self, req_handler: web.RequestHandler) -> Optional[str]:
         """Authenticate all requests and ignore any checks."""
         return None
 
@@ -68,14 +73,18 @@ class BasicAuthManager(BaseAuthManager):
     HEADER_PREFIX = "Basic "
     """Header prefix for the 'Authorization:' header with this style auth."""
 
-    def __init__(self, user_password_mapping=None, ignore_on_read=True):
+    def __init__(
+        self,
+        user_password_mapping: Optional[dict[str, str]] = None,
+        ignore_on_read: bool = True,
+    ):
         super(BasicAuthManager, self).__init__(ignore_on_read=ignore_on_read)
         if isinstance(user_password_mapping, dict):
             self.user_password_mapping = user_password_mapping
         else:
             self.user_password_mapping = {}
 
-    def authenticate(self, req_handler):
+    def authenticate(self, req_handler: web.RequestHandler) -> str:
         """Authenticate this request by checking for the 'Basic' header."""
         # Check for the authentication header.
         header = req_handler.request.headers.get("Authorization", None)
