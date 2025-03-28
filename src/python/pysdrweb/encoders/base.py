@@ -3,7 +3,7 @@
 Module with shared files between the different encoder types.
 """
 
-from typing import Optional, Callable, Awaitable
+from typing import Optional, Callable, Awaitable, BinaryIO
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from pysdrweb.util.misc import PCMBufferAddress
@@ -33,10 +33,10 @@ class BaseEncoder(ABC):
     @abstractmethod
     async def encode(
         self,
-        stream,
+        stream: BinaryIO,
         format_type: str,
         timeout: Optional[float] = None,
-        async_flush: Callable[[], Awaitable[None]] = None,
-        start_address=None,
+        async_flush: Optional[Callable[[], Awaitable[None]]] = None,
+        start_address: Optional[PCMBufferAddress] = None,
     ) -> PCMBufferAddress:
         """Encode the output from the driver into the given stream."""

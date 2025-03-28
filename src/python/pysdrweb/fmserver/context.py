@@ -3,14 +3,41 @@
 Implementation of the 'FmServerContext' and associated helpers.
 """
 
-from typing import Optional
+from typing import Optional, Any
 import asyncio
+from dataclasses import dataclass, asdict, field
 
 # Local Imports
 from pysdrweb.util.logger import logger
 from pysdrweb.util.auth import parse_auth_manager_from_options, BaseAuthManager
-from pysdrweb.fmserver.hls_streaming import HLSManager
-from pysdrweb.drivers import RtlFmExecDriver, AbstractPCMDriver
+from pysdrweb.fmserver.hls_streaming import HLSManager, HLSConfig
+from pysdrweb.drivers import RtlFmExecDriver, RtlFmConfig, AbstractPCMDriver
+
+
+@dataclass
+class FmServerConfig:
+    """Configuration for the FM server."""
+
+    ports: list[int| str] = field(default_factory=lambda: [9000])
+    """List of ports (and UNIX socket files) to listen on."""
+
+    driver: RtlFmConfig = field(default_factory=RtlFmConfig)
+    """Configuration for the driver to generate PCM data."""
+
+    hls: HLSConfig = field(default_factory=HLSConfig)
+    """Configuration for HLS streaming. If None, it isn't enabled."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Export this configuration to a (JSON-serializable) dictionary."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, config_dict):
+        """Import a dictionary into this config."""
+        ports = config_dict.get("ports", [9000])
+        driver = RtlFmConfig.from_dict(config_dict.get("driver", {}))
+        hls = HLSConfig.from_dict(config_dict.get("hls", {}))
+        return cls(ports=ports, driver=driver, hls=hls)
 
 
 class FmServerContext:
@@ -24,22 +51,18 @@ class FmServerContext:
      - Default/starting frequency
     """
 
-    def __init__(
-        self,
-        driver: AbstractPCMDriver,
-        auth_manager: BaseAuthManager,
-        hls_manager: Optional[HLSManager] = None,
-        default_frequency=None,
-    ):
-        self._driver = driver
-        self._auth_manager = auth_manager
-        if default_frequency:
-            self._default_frequency = default_frequency
-        else:
+    def __init__(self, config: FmServerConfig):
+        self._driver = RtlFmExecDriver(config.driver)
+        self._auth_manager = None
+        self._default_frequency = config.driver.default_frequency
+        if not self._default_frequency:
             # Pick some random frequency. This should be passed, usually.
             self._default_frequency = "107.3M"
 
-        self._hls_manager = hls_manager
+        if config.hls.enabled:
+            self._hls_manager = HLSManager(self._driver, config.hls)
+        else:
+            self._hls_manager = None
 
     @property
     def driver(self) -> AbstractPCMDriver:
@@ -86,29 +109,3 @@ class FmServerContext:
         if self.hls_manager:
             fut = asyncio.create_task(self.hls_manager.run())
             self.driver.add_awaitable(fut)
-
-
-def parse_option_dict(option_dict):
-    """Parse the given dict of options and return an FMServerContext."""
-    auth_manager = parse_auth_manager_from_options(option_dict)
-
-    # TODO -- Handle more driver types.
-    driver = RtlFmExecDriver.from_config(option_dict.get("driver", {}))
-
-    # Parse HLS options.
-    hls_option_dict = option_dict.get("hls", {})
-    if hls_option_dict and hls_option_dict.get("enabled", False):
-        # Parse the applicable fields.
-        chunk_count = hls_option_dict.get("chunk_count", 6)
-        chunk_secs = hls_option_dict.get("seconds_per_chunk", 10)
-        fmt = hls_option_dict.get("format")
-        hls_manager = HLSManager(
-            driver, count=chunk_count, secs_per_chunk=chunk_secs, fmt=fmt
-        )
-    else:
-        hls_manager = None
-
-    # Return the context with all of these parsed options.
-    return FmServerContext(
-        driver, auth_manager, hls_manager, option_dict.get("default_frequency")
-    )

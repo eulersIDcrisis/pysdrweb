@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger("pysdrweb")
 
 
-def get_child_logger(name):
+def get_child_logger(name) -> logging.Logger:
     """Get the logger for the given scope."""
     return logger.getChild(name)
 

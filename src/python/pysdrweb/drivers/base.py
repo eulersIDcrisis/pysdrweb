@@ -3,6 +3,10 @@
 Base/Common modules for RTL Driver interactions.
 """
 
+# Typing Imports
+from collections.abc import AsyncGenerator
+
+# Standard Imports
 import abc
 import asyncio
 from collections import deque
@@ -33,7 +37,7 @@ class AbstractPCMDriver(abc.ABC):
         self._log = deque()
 
         # Data buffer and indexing.
-        self._buffer = deque(maxlen=max_chunk_count)
+        self._buffer = deque[bytes](maxlen=max_chunk_count)
         self._seq_index = seq_index
         # Buffer queues and related keys.
         self._buffer_cond = asyncio.Condition()
@@ -46,27 +50,27 @@ class AbstractPCMDriver(abc.ABC):
         self._sample_width = sample_width
 
     @property
-    def framerate(self):
+    def framerate(self) -> int:
         """Sampling rate of the PCM data (in Hz)."""
         return self._framerate
 
     @property
-    def sample_rate(self):
+    def sample_rate(self) -> int:
         """The sampling rate of the PCM data (in Hz). Alias of framerate."""
         return self.framerate
 
     @property
-    def sample_width(self):
+    def sample_width(self) -> int:
         """The width of each sample (in bytes)."""
         return self._sample_width
 
     @property
-    def nchannels(self):
+    def nchannels(self) -> int:
         """Number of channels for each sample."""
         return self._nchannels
 
     @property
-    def framesize(self):
+    def framesize(self) -> int:
         """Number of bytes per single frame/sample of PCM data."""
         return self._nchannels * self._sample_width
 
@@ -168,7 +172,7 @@ class AbstractPCMDriver(abc.ABC):
         # Start the process up again.
         await self.start(self._frequency)
 
-    async def add_pcm_chunk(self, chunk):
+    async def add_pcm_chunk(self, chunk: bytes):
         """Add the given chunk of data into the buffer.
 
         Also queues this data for anyone iterating over the PCM data.
@@ -181,7 +185,9 @@ class AbstractPCMDriver(abc.ABC):
             for queue in self._buffer_queues.values():
                 queue.put_nowait(item)
 
-    async def pcm_item_generator(self, seq_index=-1):
+    async def pcm_item_generator(
+        self, seq_index: int = -1
+    ) -> AsyncGenerator[misc.PCMBufferItem, None, None]:
         """Generator to iterate over the PCM data received.
 
         This will keep returning PCM data in chunks, along with a timestamp to

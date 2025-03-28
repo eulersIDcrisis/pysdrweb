@@ -15,6 +15,7 @@ import wave
 # PySDRWeb Imports
 from pysdrweb.util import misc
 from pysdrweb.encoders.base import BaseEncoder, UnsupportedFormatError
+from pysdrweb.drivers import AbstractPCMDriver
 
 
 # Helpers to abstract initializing the file to write encoded data to.
@@ -86,7 +87,7 @@ class StandardLibraryEncoder(BaseEncoder):
 
     async def encode(
         self,
-        stream,
+        stream: BinaryIO,
         format_type: str,
         timeout: Optional[float] = None,
         async_flush: Optional[Callable[[None], Awaitable[None]]] = None,
@@ -103,7 +104,12 @@ class StandardLibraryEncoder(BaseEncoder):
 
 
 async def _process_using_native_library(
-    driver, file_obj, fmt, timeout, async_flush=None, start_address=None
+    driver: AbstractPCMDriver,
+    file_obj: BinaryIO,
+    fmt: str,
+    timeout: float | None,
+    async_flush: Callable[[], Awaitable | None] | None = None,
+    start_address: misc.PCMBufferAddress | None = None,
 ) -> misc.PCMBufferAddress:
     """Write out the PCM data using the native python 3 sound libraries.
 

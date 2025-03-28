@@ -5,8 +5,39 @@ Driver
 
 import shlex
 import asyncio
+from dataclasses import dataclass
 from pysdrweb.util import misc
 from pysdrweb.drivers.base import AbstractPCMDriver
+
+
+@dataclass
+class RtlFmConfig:
+    """Configuration for running with the 'rtl_fm' executable driver."""
+
+    exec_path: str = "rtl_fm"
+    """Path to the executable."""
+
+    default_frequency: str = "107.3M"
+    """Set the default frequency when starting."""
+
+    kb_buffer_size: int = 128
+    """Buffer size for reading from 'rtl_fm' (in kB)."""
+
+    framerate: int = 48000
+    """Framerate (in Hz) for reading the PCM data."""
+
+    @classmethod
+    def from_dict(cls, config_dict):
+        result = cls()
+        if "exec_path" in config_dict:
+            result.exec_path = config_dict["exec_path"]
+        if "default_frequency" in config_dict:
+            result.default_frequency = config_dict["default_frequency"]
+        if "kb_buffer_size" in config_dict:
+            result.kb_buffer_size = int(config_dict["kb_buffer_size"])
+        if "framerate" in config_dict:
+            result.framerate = int(config_dict["framerate"])
+        return result
 
 
 class RtlFmExecDriver(AbstractPCMDriver):
@@ -20,30 +51,28 @@ class RtlFmExecDriver(AbstractPCMDriver):
     """
 
     @classmethod
-    def from_config(cls, config):
-        rtlfm = config.get("rtl_fm")
+    def from_config(cls, config_dict) -> "RtlFmExecDriver":
+        rtlfm = config_dict.get("rtl_fm")
         if not rtlfm:
             rtlfm = misc.find_executable("rtl_fm")
             if not rtlfm:
                 raise Exception("Could not find path to: rtl_fm")
-            config["rtl_fm"] = rtlfm
+        config = RtlFmConfig(exec_path=rtlfm)
+        if "framerate" in config_dict:
+            config.framerate = int(config_dict["framerate"])
         return cls(config)
 
-    def __init__(self, config):
-        # TODO -- Probably should not assume this path, but it works for now.
-        self._rtlfm_exec_path = config["rtl_fm"]
-        framerate = config.get("framerate", 48000)
-
+    def __init__(self, config: RtlFmConfig):
+        self._config = config
         # Extract the buffer size.
-        kb_buffer_size = int(config.get("kb_buffer_size", 128))
         super().__init__(
             # RTL-FM dumps its output into one channel, each sample 2 bytes
             # long. The frame-rate/sample-rate is somewhat configurable,
             # however.
             nchannels=1,
             sample_width=2,
-            framerate=framerate,
-            max_chunk_count=kb_buffer_size,
+            framerate=self._config.framerate,
+            max_chunk_count=self._config.kb_buffer_size,
         )
 
     async def _read_kb_chunks_into_buffer(self, stm):
@@ -60,14 +89,14 @@ class RtlFmExecDriver(AbstractPCMDriver):
 
     async def start(self, frequency):
         rtl_cmd = [
-            shlex.quote(self._rtlfm_exec_path),
+            shlex.quote(self._config.exec_path),
             # Configure the frequency here.
             "-f",
             shlex.quote(f"{frequency}"),
             "-s",
             "200k",
             "-r",
-            shlex.quote(f"{self.framerate}"),
+            shlex.quote(f"{self._config.framerate}"),
             "-A",
             "fast",
             "-",
