@@ -63,6 +63,11 @@ of the server as appropriate.
         ),
     )
     parser.add_argument(
+        "--dump-config",
+        action="store_true",
+        help=("Dump starter configuration file and exit."),
+    )
+    parser.add_argument(
         "-p",
         "--port",
         action="append",
@@ -107,8 +112,10 @@ of the server as appropriate.
     logging.basicConfig(level=level)
 
     # Parse the configuration file first.
+    config_path = "config.yaml"
     if args.config:
-        with open(args.config, "r", encoding="utf-8") as stm:
+        config_path = args.config
+        with open(config_path, "r", encoding="utf-8") as stm:
             option_dict = yaml.safe_load(stm)
     else:
         option_dict = {}
@@ -149,6 +156,13 @@ of the server as appropriate.
             option_dict["driver"]["rtl_fm"] = args.rtl
     if args.frequency:
         option_dict["default_frequency"] = args.frequency
+
+    # Dump the configuration file if requested.
+    if args.dump_config:
+        # Write the configuration file.
+        with open(config_path, "w") as stm:
+            yaml.dump(option_dict, stm)
+        parser.exit(0, f"Wrote out the config file to: {config_path}")
 
     # Create the context.
     return parse_option_dict(option_dict), ports

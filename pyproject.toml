@@ -42,7 +42,7 @@ mp3 =  [ "lameenc" ]
 
 
 [tool.poetry.group.dev.dependencies]
-black = "^24.0.0"
+black = "^25.0.0"
 pylint = "^3.2.5"
 mypy = "^1.10.1"
 

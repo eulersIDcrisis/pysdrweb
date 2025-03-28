@@ -7,6 +7,7 @@ from typing import Optional, BinaryIO
 import io
 import asyncio
 from collections import OrderedDict
+from dataclasses import dataclass
 
 # Third-party imports.
 from tornado import web
@@ -26,6 +27,27 @@ from pysdrweb.encoders import (
 
 
 logger = get_child_logger("hls")
+
+
+@dataclass
+class HLSConfig:
+    """Configuration for HLS settings."""
+
+    count: int = 6
+    """Number of chunks to have stored in the manager."""
+
+    secs_per_chunk: float = 10
+    """Duration (in seconds) of each chunk."""
+
+    fmt: Optional[str] = None
+    """Format of each chunk."""
+
+    start_index: int = 1
+    """First index to return.
+
+    The files are named sequentially and this field rarely needs to be
+    touched.
+    """
 
 
 class HLSManager:

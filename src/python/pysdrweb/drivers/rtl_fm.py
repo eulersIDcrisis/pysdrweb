@@ -5,8 +5,26 @@ Driver
 
 import shlex
 import asyncio
+from dataclasses import dataclass
 from pysdrweb.util import misc
 from pysdrweb.drivers.base import AbstractPCMDriver
+
+
+@dataclass
+class RtlFmConfig:
+    """Configuration for running with the 'rtl_fm' executable driver."""
+
+    exec_path: str
+    """Path to the executable."""
+
+    default_frequency: str = "107.3M"
+    """Set the default frequency when starting."""
+
+    kb_buffer_size: int = 128
+    """Buffer size for reading from 'rtl_fm' (in kB)."""
+
+    framerate: int = 48000
+    """Framerate (in Hz) for reading the PCM data."""
 
 
 class RtlFmExecDriver(AbstractPCMDriver):
@@ -29,21 +47,17 @@ class RtlFmExecDriver(AbstractPCMDriver):
             config["rtl_fm"] = rtlfm
         return cls(config)
 
-    def __init__(self, config):
-        # TODO -- Probably should not assume this path, but it works for now.
-        self._rtlfm_exec_path = config["rtl_fm"]
-        framerate = config.get("framerate", 48000)
-
+    def __init__(self, config: RtlFmConfig):
+        self._config = config
         # Extract the buffer size.
-        kb_buffer_size = int(config.get("kb_buffer_size", 128))
         super().__init__(
             # RTL-FM dumps its output into one channel, each sample 2 bytes
             # long. The frame-rate/sample-rate is somewhat configurable,
             # however.
             nchannels=1,
             sample_width=2,
-            framerate=framerate,
-            max_chunk_count=kb_buffer_size,
+            framerate=self._config.framerate,
+            max_chunk_count=self._config.kb_buffer_size,
         )
 
     async def _read_kb_chunks_into_buffer(self, stm):
@@ -67,7 +81,7 @@ class RtlFmExecDriver(AbstractPCMDriver):
             "-s",
             "200k",
             "-r",
-            shlex.quote(f"{self.framerate}"),
+            shlex.quote(f"{self._config.framerate}"),
             "-A",
             "fast",
             "-",

@@ -144,7 +144,7 @@ class EventLoopContext:
         logger.info("Stopped the server.")
 
     def stop(self):
-        """Schedule this IOLoopContext to stop.
+        """Schedule this EventLoopContext to stop.
 
         NOTE: This is thread-safe and can be called from anywhere. This call
         does NOT wait for the loop to stop.
