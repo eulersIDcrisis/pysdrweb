@@ -51,14 +51,14 @@ _FORMAT_REGISTRY = {
     "MP3": "audio/mp3",
 }
 
-IS_MP3_AVAILABLE = bool("MP3" in _FORMAT_REGISTRY)
+IS_MP3_AVAILABLE = bool("MP3" in _ENCODER_REGISTRY)
 """Return whether an MP3-compatible encoder is available.
 
 This is useful because some formats (HLS in particular) can work better when
 MP3 is explicitly available.
 """
 
-IS_FLAC_AVAILABLE = bool("FLAC" in _FORMAT_REGISTRY)
+IS_FLAC_AVAILABLE = bool("FLAC" in _ENCODER_REGISTRY)
 """Return whether an MP3-compatible encoder is available.
 
 This is useful because some formats (HLS in particular) can work better when

@@ -31,6 +31,7 @@ logger = get_child_logger("hls")
 @dataclass
 class HLSConfig:
     """Configuration for HLS settings."""
+
     enabled: bool = False
     """Store whether HLS is enabled."""
 
@@ -103,7 +104,7 @@ class HLSManager:
             # recommended by Apple and others.
             logger.warning(
                 "HLS should have more than 6 chunks. Configured with: %s ",
-                self._chunk_count,
+                self._config.chunk_count,
             )
         self._next_idx = config.start_index
         # Store a mapping of: <index> -> buffer or path
@@ -165,8 +166,8 @@ class HLSManager:
             encoder = get_encoder_for_format_type(self.driver, self.fmt)
             start_addr = await encoder.encode(
                 file_obj,
-                self._fmt,
-                timeout=self._secs_per_chunk,
+                self.fmt,
+                timeout=self.secs_per_chunk,
                 start_address=start_addr,
             )
             self._file_mapping[self._next_idx] = file_obj
