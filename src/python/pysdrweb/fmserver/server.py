@@ -15,18 +15,18 @@ from pysdrweb.util.misc import get_version
 from pysdrweb.util.event_loop_util import EventLoopContext
 from pysdrweb.util.logger import get_child_logger
 from pysdrweb.fmserver.handlers import generate_app
-from pysdrweb.fmserver.context import parse_option_dict
+from pysdrweb.fmserver.context import FmServerConfig, FmServerContext
 
 
 logger = get_child_logger("fmserver")
 
 
-class FmServerContext(EventLoopContext):
+class FmServer(EventLoopContext):
 
-    def __init__(self, context, ports):
+    def __init__(self, config: FmServerConfig):
         super().__init__()
-        self._context = context
-        self._ports = ports
+        self._context = FmServerContext(config)
+        self._ports = config.ports
 
     async def initialize(self):
         await super().initialize()
@@ -146,37 +146,37 @@ of the server as appropriate.
             curr_ports = list(curr_ports)
         curr_ports.append(f"unix:{unix}")
         option_dict["port"] = curr_ports
-    # Final, parsed ports
-    ports = option_dict["port"]
+    # Final, parsed ports. If no ports are available, use the default.
+    config = FmServerConfig.from_dict(option_dict)
 
     # Custom rtl_fm exec path.
     if args.rtl:
         driver_dict = option_dict.get("driver", {})
         if driver_dict:
-            option_dict["driver"]["rtl_fm"] = args.rtl
+            config.driver.exec_path = args.rtl
     if args.frequency:
-        option_dict["default_frequency"] = args.frequency
+        config.driver.default_frequency = args.frequency
 
     # Dump the configuration file if requested.
     if args.dump_config:
         # Write the configuration file.
+        option_dict = config.export_to_dict()
         with open(config_path, "w") as stm:
             yaml.dump(option_dict, stm)
         parser.exit(0, f"Wrote out the config file to: {config_path}")
 
-    # Create the context.
-    return parse_option_dict(option_dict), ports
+    return config
 
 
-def fm_server_command():
+def run_fm_server():
     """CLI to run the FM server via RTL-FM."""
-    context, ports = parse_cli_options()
-    server = FmServerContext(context, ports)
+    config = parse_cli_options()
+    server = FmServer(config)
 
-    port_msg = ", ".join([f"{p}" for p in ports])
-    logger.info("Running server on ports: %s", port_msg)
+    port_msg = "\n - ".join([f"{p}" for p in config.ports])
+    logger.info("Running server on ports:\n - %s", port_msg)
     server.run()
 
 
 if __name__ == "__main__":
-    fm_server_command()
+    run_fm_server()

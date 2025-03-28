@@ -47,9 +47,9 @@ pylint = "^3.2.5"
 mypy = "^1.10.1"
 
 [tool.poetry.scripts]
-pysdrweb_server = 'pysdrweb.fmserver.server:fm_server_command'
+pysdrweb_server = 'pysdrweb.fmserver.server:run_fm_server'
 # We'll keep this alias for legacy purposes.
-sdrfm_server = 'pysdrweb.fmserver.server:fm_server_command'
+sdrfm_server = 'pysdrweb.fmserver.server:run_fm_server'
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

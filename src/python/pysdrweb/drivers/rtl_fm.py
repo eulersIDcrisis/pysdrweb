@@ -14,7 +14,7 @@ from pysdrweb.drivers.base import AbstractPCMDriver
 class RtlFmConfig:
     """Configuration for running with the 'rtl_fm' executable driver."""
 
-    exec_path: str
+    exec_path: str = "rtl_fm"
     """Path to the executable."""
 
     default_frequency: str = "107.3M"
@@ -25,6 +25,19 @@ class RtlFmConfig:
 
     framerate: int = 48000
     """Framerate (in Hz) for reading the PCM data."""
+
+    @classmethod
+    def from_dict(cls, config_dict):
+        result = cls()
+        if "exec_path" in config_dict:
+            result.exec_path = config_dict["exec_path"]
+        if "default_frequency" in config_dict:
+            result.default_frequency = config_dict["default_frequency"]
+        if "kb_buffer_size" in config_dict:
+            result.kb_buffer_size = int(config_dict["kb_buffer_size"])
+        if "framerate" in config_dict:
+            result.framerate = int(config_dict["framerate"])
+        return result
 
 
 class RtlFmExecDriver(AbstractPCMDriver):

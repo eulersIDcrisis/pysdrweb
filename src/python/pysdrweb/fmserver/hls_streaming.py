@@ -51,6 +51,21 @@ class HLSConfig:
     touched.
     """
 
+    @classmethod
+    def from_dict(cls, hls_dict):
+        result = cls()
+        if "enabled" in hls_dict:
+            result.enabled = bool(hls_dict["enabled"])
+        if "chunk_count" in hls_dict:
+            result.chunk_count = int(hls_dict["chunk_count"])
+        if "secs_per_chunk" in hls_dict:
+            result.secs_per_chunk = float(hls_dict["secs_per_chunk"])
+        if "fmt" in hls_dict:
+            result.fmt = hls_dict["fmt"]
+        if "start_index" in hls_dict:
+            result.start_index = hls_dict["start_index"]
+        return result
+
 
 class HLSManager:
     """Manager that encodes an incoming (PCM) stream into an HLS format."""
