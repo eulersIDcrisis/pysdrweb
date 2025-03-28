@@ -9,7 +9,7 @@ import asyncio
 # Local Imports
 from pysdrweb.util.logger import logger
 from pysdrweb.util.auth import parse_auth_manager_from_options, BaseAuthManager
-from pysdrweb.fmserver.hls_streaming import HLSManager
+from pysdrweb.fmserver.hls_streaming import HLSManager, HLSConfig
 from pysdrweb.drivers import RtlFmExecDriver, AbstractPCMDriver
 
 
@@ -97,14 +97,9 @@ def parse_option_dict(option_dict) -> FmServerContext:
 
     # Parse HLS options.
     hls_option_dict = option_dict.get("hls", {})
-    if hls_option_dict and hls_option_dict.get("enabled", False):
-        # Parse the applicable fields.
-        chunk_count = hls_option_dict.get("chunk_count", 6)
-        chunk_secs = hls_option_dict.get("seconds_per_chunk", 10)
-        fmt = hls_option_dict.get("format")
-        hls_manager = HLSManager(
-            driver, count=chunk_count, secs_per_chunk=chunk_secs, fmt=fmt
-        )
+    hls_config = HLSManager.from_config(hls_option_dict)
+    if hls_config.enabled:
+        hls_manager = HLSManager(driver, hls_config)
     else:
         hls_manager = None
 

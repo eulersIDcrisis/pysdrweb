@@ -38,13 +38,15 @@ class RtlFmExecDriver(AbstractPCMDriver):
     """
 
     @classmethod
-    def from_config(cls, config):
-        rtlfm = config.get("rtl_fm")
+    def from_config(cls, config_dict) -> "RtlFmExecDriver":
+        rtlfm = config_dict.get("rtl_fm")
         if not rtlfm:
             rtlfm = misc.find_executable("rtl_fm")
             if not rtlfm:
                 raise Exception("Could not find path to: rtl_fm")
-            config["rtl_fm"] = rtlfm
+        config = RtlFmConfig(exec_path=rtlfm)
+        if "framerate" in config_dict:
+            config.framerate = int(config_dict["framerate"])
         return cls(config)
 
     def __init__(self, config: RtlFmConfig):
@@ -74,7 +76,7 @@ class RtlFmExecDriver(AbstractPCMDriver):
 
     async def start(self, frequency):
         rtl_cmd = [
-            shlex.quote(self._rtlfm_exec_path),
+            shlex.quote(self._config.exec_path),
             # Configure the frequency here.
             "-f",
             shlex.quote(f"{frequency}"),
